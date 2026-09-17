@@ -272,18 +272,22 @@ select {
   color: var(--text-dim);
   margin-bottom: 8px;
 }
-.step-row {
+.step-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.step-node {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
-  margin-bottom: 6px;
 }
-.step-condition-row,
-.step-action-row {
+.step-node-condition {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.step-head-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -310,8 +314,46 @@ select {
 .entity-picker-input {
   width: 140px;
 }
-.add-condition-btn {
-  align-self: flex-start;
+
+.condition-body {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.clause-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.clause-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.combine-select {
+  font-weight: 700;
+  color: var(--accent);
+}
+.branch {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+.branch-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* --- transitions (next phase) --- */

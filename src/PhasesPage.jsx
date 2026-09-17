@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { newCondition, newPhase, newResource, newStep, newTransition, newVariable, OPERATORS } from './store';
-
-const STEP_TYPES = [
-  { value: 'add_resource', label: 'Add resource' },
-  { value: 'change_variable', label: 'Change variable' },
-  { value: 'call_function', label: 'Call function' },
-];
+import {
+  FUNCTION_KINDS,
+  newConditionClause,
+  newPhase,
+  newResource,
+  newStep,
+  newTransition,
+  newVariable,
+  OPERATORS,
+  STEP_TYPES,
+} from './store';
 
 function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   const [creating, setCreating] = useState(false);
@@ -59,59 +63,65 @@ function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   );
 }
 
-// A single "[variable] [operator] [value]" row — shared by step conditions
-// and phase transition conditions, since both are the same shape.
-function ConditionFields({ condition, onChange, variables, createVariable }) {
+// One "[variable] [operator] [value]" clause — shared by a condition step's
+// clause list and a phase transition's condition.
+function ClauseFields({ clause, onChange, variables, createVariable }) {
   return (
     <span className="condition-fields">
       <EntityPicker
         entities={variables}
-        value={condition.variableId}
-        onChange={(variableId) => onChange({ ...condition, variableId })}
+        value={clause.variableId}
+        onChange={(variableId) => onChange({ ...clause, variableId })}
         onCreate={(name) => createVariable(name)}
         placeholder="variable name"
       />
-      <select value={condition.op} onChange={(e) => onChange({ ...condition, op: e.target.value })}>
+      <select value={clause.op} onChange={(e) => onChange({ ...clause, op: e.target.value })}>
         {OPERATORS.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
-      <input
-        className="step-number"
-        value={condition.value}
-        onChange={(e) => onChange({ ...condition, value: e.target.value })}
-      />
+      <input className="step-number" value={clause.value} onChange={(e) => onChange({ ...clause, value: e.target.value })} />
     </span>
   );
 }
 
-function StepRow({ step, onChange, onRemove, resources, variables, createResource, createVariable }) {
-  return (
-    <div className="step-row">
-      {step.condition ? (
-        <div className="step-condition-row">
-          <span className="step-word">If</span>
-          <ConditionFields
-            condition={step.condition}
-            onChange={(condition) => onChange({ ...step, condition })}
-            variables={variables}
-            createVariable={createVariable}
-          />
-          <button className="btn btn-sm" onClick={() => onChange({ ...step, condition: null })}>
-            remove condition
-          </button>
-        </div>
-      ) : (
-        <button className="btn btn-sm add-condition-btn" onClick={() => onChange({ ...step, condition: newCondition() })}>
-          + If…
-        </button>
-      )}
+function clauseSummary(clause, variables) {
+  const v = variables.find((x) => x.id === clause.variableId);
+  return `${v?.name ?? 'variable'} ${OPERATORS.find((o) => o.value === clause.op)?.label ?? clause.op} ${clause.value}`;
+}
 
-      <div className="step-action-row">
-        {step.condition && <span className="step-word">then</span>}
-        <select value={step.type} onChange={(e) => onChange({ ...step, type: e.target.value })}>
+function stepSummary(step, resources, variables) {
+  if (step.type === 'variable') {
+    const v = variables.find((x) => x.id === step.variableId);
+    return `${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
+  }
+  if (step.type === 'function') {
+    if (step.functionKind === 'add_resource') {
+      const r = resources.find((x) => x.id === step.resourceId);
+      return `+${step.amount} ${r?.name ?? 'resource'}`;
+    }
+    return `call ${step.functionName || '…'}`;
+  }
+  const joiner = step.combine === 'or' ? ' OR ' : ' AND ';
+  const cond = step.clauses.map((c) => clauseSummary(c, variables)).join(joiner);
+  const thenCount = step.thenSteps.length;
+  const elseCount = step.elseSteps ? step.elseSteps.length : 0;
+  return `if ${cond} → ${thenCount} step${thenCount === 1 ? '' : 's'}${step.elseSteps ? `, else ${elseCount} step${elseCount === 1 ? '' : 's'}` : ''}`;
+}
+
+// A step can be a Variable change, a Function call (Add Resource is just a
+// built-in function), or a Condition — and a Condition is a container:
+// picking it just gives you somewhere to nest more steps, including more
+// conditions, which is how you can loop something inside itself.
+function StepNode({ step, onChange, onRemove, resources, variables, createResource, createVariable }) {
+  const changeType = (type) => onChange(type === step.type ? step : { ...newStep(type), id: step.id });
+
+  return (
+    <div className={`step-node${step.type === 'condition' ? ' step-node-condition' : ''}`}>
+      <div className="step-head-row">
+        <select value={step.type} onChange={(e) => changeType(e.target.value)}>
           {STEP_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
@@ -119,26 +129,7 @@ function StepRow({ step, onChange, onRemove, resources, variables, createResourc
           ))}
         </select>
 
-        {step.type === 'add_resource' && (
-          <span className="step-fields">
-            <EntityPicker
-              entities={resources}
-              value={step.resourceId}
-              onChange={(resourceId) => onChange({ ...step, resourceId })}
-              onCreate={(name) => createResource(name)}
-              placeholder="resource name"
-            />
-            <span className="step-word">by</span>
-            <input
-              type="number"
-              className="step-number"
-              value={step.amount}
-              onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
-            />
-          </span>
-        )}
-
-        {step.type === 'change_variable' && (
+        {step.type === 'variable' && (
           <span className="step-fields">
             <EntityPicker
               entities={variables}
@@ -160,13 +151,39 @@ function StepRow({ step, onChange, onRemove, resources, variables, createResourc
           </span>
         )}
 
-        {step.type === 'call_function' && (
+        {step.type === 'function' && (
           <span className="step-fields">
-            <input
-              placeholder="function name"
-              value={step.functionName}
-              onChange={(e) => onChange({ ...step, functionName: e.target.value })}
-            />
+            <select value={step.functionKind} onChange={(e) => onChange({ ...step, functionKind: e.target.value })}>
+              {FUNCTION_KINDS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            {step.functionKind === 'add_resource' ? (
+              <>
+                <EntityPicker
+                  entities={resources}
+                  value={step.resourceId}
+                  onChange={(resourceId) => onChange({ ...step, resourceId })}
+                  onCreate={(name) => createResource(name)}
+                  placeholder="resource name"
+                />
+                <span className="step-word">by</span>
+                <input
+                  type="number"
+                  className="step-number"
+                  value={step.amount}
+                  onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
+                />
+              </>
+            ) : (
+              <input
+                placeholder="function name"
+                value={step.functionName}
+                onChange={(e) => onChange({ ...step, functionName: e.target.value })}
+              />
+            )}
           </span>
         )}
 
@@ -174,6 +191,107 @@ function StepRow({ step, onChange, onRemove, resources, variables, createResourc
           ✕
         </button>
       </div>
+
+      {step.type === 'condition' && (
+        <div className="condition-body">
+          <div className="clause-list">
+            {step.clauses.map((clause, i) => (
+              <div className="clause-row" key={clause.id}>
+                {i > 0 && (
+                  <select
+                    className="combine-select"
+                    value={step.combine}
+                    onChange={(e) => onChange({ ...step, combine: e.target.value })}
+                  >
+                    <option value="and">AND</option>
+                    <option value="or">OR</option>
+                  </select>
+                )}
+                {i === 0 && <span className="step-word">If</span>}
+                <ClauseFields
+                  clause={clause}
+                  onChange={(next) => onChange({ ...step, clauses: step.clauses.map((c) => (c.id === clause.id ? next : c)) })}
+                  variables={variables}
+                  createVariable={createVariable}
+                />
+                {step.clauses.length > 1 && (
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => onChange({ ...step, clauses: step.clauses.filter((c) => c.id !== clause.id) })}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              className="btn btn-sm"
+              onClick={() => onChange({ ...step, clauses: [...step.clauses, newConditionClause()] })}
+            >
+              + Add condition
+            </button>
+          </div>
+
+          <div className="branch">
+            <div className="branch-label">Then</div>
+            <StepList
+              steps={step.thenSteps}
+              onChange={(thenSteps) => onChange({ ...step, thenSteps })}
+              resources={resources}
+              variables={variables}
+              createResource={createResource}
+              createVariable={createVariable}
+            />
+          </div>
+
+          {step.elseSteps ? (
+            <div className="branch">
+              <div className="branch-label">
+                Else
+                <button className="btn btn-sm" onClick={() => onChange({ ...step, elseSteps: null })}>
+                  remove else
+                </button>
+              </div>
+              <StepList
+                steps={step.elseSteps}
+                onChange={(elseSteps) => onChange({ ...step, elseSteps })}
+                resources={resources}
+                variables={variables}
+                createResource={createResource}
+                createVariable={createVariable}
+              />
+            </div>
+          ) : (
+            <button className="btn btn-sm" onClick={() => onChange({ ...step, elseSteps: [] })}>
+              + Add Else
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StepList({ steps, onChange, resources, variables, createResource, createVariable }) {
+  const update = (i, next) => onChange(steps.map((s, idx) => (idx === i ? next : s)));
+  const remove = (i) => onChange(steps.filter((_, idx) => idx !== i));
+  return (
+    <div className="step-list">
+      {steps.map((step, i) => (
+        <StepNode
+          key={step.id}
+          step={step}
+          onChange={(next) => update(i, next)}
+          onRemove={() => remove(i)}
+          resources={resources}
+          variables={variables}
+          createResource={createResource}
+          createVariable={createVariable}
+        />
+      ))}
+      <button className="btn btn-sm" onClick={() => onChange([...steps, newStep('variable')])}>
+        + Add Step
+      </button>
     </div>
   );
 }
@@ -197,8 +315,8 @@ function TransitionRow({ transition, phases, currentPhaseId, variables, createVa
       {transition.condition ? (
         <>
           <span className="step-word">on</span>
-          <ConditionFields
-            condition={transition.condition}
+          <ClauseFields
+            clause={transition.condition}
             onChange={(condition) => onChange({ ...transition, condition })}
             variables={variables}
             createVariable={createVariable}
@@ -210,7 +328,7 @@ function TransitionRow({ transition, phases, currentPhaseId, variables, createVa
       ) : (
         <>
           <span className="step-word step-word-muted">(always)</span>
-          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: newCondition() })}>
+          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: newConditionClause() })}>
             + on condition…
           </button>
         </>
@@ -253,33 +371,11 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
     if (selectedId === id) setSelectedId(null);
   };
 
-  const addStep = () => updatePhase(selected.id, { steps: [...selected.steps, newStep('add_resource')] });
-  const updateStep = (stepId, next) => updatePhase(selected.id, { steps: selected.steps.map((s) => (s.id === stepId ? next : s)) });
-  const removeStep = (stepId) => updatePhase(selected.id, { steps: selected.steps.filter((s) => s.id !== stepId) });
-
   const addTransition = () => updatePhase(selected.id, { transitions: [...selected.transitions, newTransition()] });
   const updateTransition = (transId, next) =>
     updatePhase(selected.id, { transitions: selected.transitions.map((t) => (t.id === transId ? next : t)) });
   const removeTransition = (transId) =>
     updatePhase(selected.id, { transitions: selected.transitions.filter((t) => t.id !== transId) });
-
-  const conditionSummary = (condition) => {
-    const v = variables.find((x) => x.id === condition.variableId);
-    return `${v?.name ?? 'variable'} ${OPERATORS.find((o) => o.value === condition.op)?.label ?? condition.op} ${condition.value}`;
-  };
-
-  const stepSummary = (step) => {
-    const prefix = step.condition ? `if ${conditionSummary(step.condition)} → ` : '';
-    if (step.type === 'add_resource') {
-      const r = resources.find((x) => x.id === step.resourceId);
-      return `${prefix}+${step.amount} ${r?.name ?? 'resource'}`;
-    }
-    if (step.type === 'change_variable') {
-      const v = variables.find((x) => x.id === step.variableId);
-      return `${prefix}${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
-    }
-    return `${prefix}call ${step.functionName || '…'}`;
-  };
 
   return (
     <div className="page phases-page">
@@ -301,7 +397,7 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                   <div className="phase-node-chips">
                     {phase.steps.map((s) => (
                       <span className="phase-chip" key={s.id}>
-                        {stepSummary(s)}
+                        {stepSummary(s, resources, variables)}
                       </span>
                     ))}
                   </div>
@@ -309,7 +405,7 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                 {phase.transitions.map((t) => (
                   <div className="phase-transition-badge" key={t.id}>
                     → {phases.find((p) => p.id === t.targetPhaseId)?.name ?? '…'}
-                    {t.condition ? ` on ${conditionSummary(t.condition)}` : ' (always)'}
+                    {t.condition ? ` on ${clauseSummary(t.condition, variables)}` : ' (always)'}
                   </div>
                 ))}
               </button>
@@ -342,21 +438,14 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
               <div className="phase-editor-section">
                 <div className="phase-editor-section-title">Steps</div>
                 {selected.steps.length === 0 && <div className="empty-hint">No steps yet.</div>}
-                {selected.steps.map((step) => (
-                  <StepRow
-                    key={step.id}
-                    step={step}
-                    onChange={(next) => updateStep(step.id, next)}
-                    onRemove={() => removeStep(step.id)}
-                    resources={resources}
-                    variables={variables}
-                    createResource={createResource}
-                    createVariable={createVariable}
-                  />
-                ))}
-                <button className="btn btn-sm" onClick={addStep}>
-                  + Add Step
-                </button>
+                <StepList
+                  steps={selected.steps}
+                  onChange={(steps) => updatePhase(selected.id, { steps })}
+                  resources={resources}
+                  variables={variables}
+                  createResource={createResource}
+                  createVariable={createVariable}
+                />
               </div>
 
               <div className="phase-editor-section">
