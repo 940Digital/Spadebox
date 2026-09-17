@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { newPhase, newResource, newStep, newVariable, OPERATORS } from './store';
+import { newCondition, newPhase, newResource, newStep, newTransition, newVariable, OPERATORS } from './store';
 
 const STEP_TYPES = [
   { value: 'add_resource', label: 'Add resource' },
@@ -59,122 +59,166 @@ function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   );
 }
 
+// A single "[variable] [operator] [value]" row — shared by step conditions
+// and phase transition conditions, since both are the same shape.
+function ConditionFields({ condition, onChange, variables, createVariable }) {
+  return (
+    <span className="condition-fields">
+      <EntityPicker
+        entities={variables}
+        value={condition.variableId}
+        onChange={(variableId) => onChange({ ...condition, variableId })}
+        onCreate={(name) => createVariable(name)}
+        placeholder="variable name"
+      />
+      <select value={condition.op} onChange={(e) => onChange({ ...condition, op: e.target.value })}>
+        {OPERATORS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <input
+        className="step-number"
+        value={condition.value}
+        onChange={(e) => onChange({ ...condition, value: e.target.value })}
+      />
+    </span>
+  );
+}
+
 function StepRow({ step, onChange, onRemove, resources, variables, createResource, createVariable }) {
   return (
     <div className="step-row">
-      <select value={step.type} onChange={(e) => onChange({ ...step, type: e.target.value })}>
-        {STEP_TYPES.map((t) => (
-          <option key={t.value} value={t.value}>
-            {t.label}
+      {step.condition ? (
+        <div className="step-condition-row">
+          <span className="step-word">If</span>
+          <ConditionFields
+            condition={step.condition}
+            onChange={(condition) => onChange({ ...step, condition })}
+            variables={variables}
+            createVariable={createVariable}
+          />
+          <button className="btn btn-sm" onClick={() => onChange({ ...step, condition: null })}>
+            remove condition
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-sm add-condition-btn" onClick={() => onChange({ ...step, condition: newCondition() })}>
+          + If…
+        </button>
+      )}
+
+      <div className="step-action-row">
+        {step.condition && <span className="step-word">then</span>}
+        <select value={step.type} onChange={(e) => onChange({ ...step, type: e.target.value })}>
+          {STEP_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+
+        {step.type === 'add_resource' && (
+          <span className="step-fields">
+            <EntityPicker
+              entities={resources}
+              value={step.resourceId}
+              onChange={(resourceId) => onChange({ ...step, resourceId })}
+              onCreate={(name) => createResource(name)}
+              placeholder="resource name"
+            />
+            <span className="step-word">by</span>
+            <input
+              type="number"
+              className="step-number"
+              value={step.amount}
+              onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
+            />
+          </span>
+        )}
+
+        {step.type === 'change_variable' && (
+          <span className="step-fields">
+            <EntityPicker
+              entities={variables}
+              value={step.variableId}
+              onChange={(variableId) => onChange({ ...step, variableId })}
+              onCreate={(name) => createVariable(name)}
+              placeholder="variable name"
+            />
+            <select value={step.op} onChange={(e) => onChange({ ...step, op: e.target.value })}>
+              <option value="set">set to</option>
+              <option value="add">add</option>
+            </select>
+            <input
+              type="number"
+              className="step-number"
+              value={step.amount}
+              onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
+            />
+          </span>
+        )}
+
+        {step.type === 'call_function' && (
+          <span className="step-fields">
+            <input
+              placeholder="function name"
+              value={step.functionName}
+              onChange={(e) => onChange({ ...step, functionName: e.target.value })}
+            />
+          </span>
+        )}
+
+        <button className="btn btn-sm btn-danger" onClick={onRemove}>
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TransitionRow({ transition, phases, currentPhaseId, variables, createVariable, onChange, onRemove }) {
+  return (
+    <div className="transition-row">
+      <span className="step-word">Next phase:</span>
+      <select value={transition.targetPhaseId} onChange={(e) => onChange({ ...transition, targetPhaseId: e.target.value })}>
+        <option value="" disabled>
+          choose a phase…
+        </option>
+        {phases.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+            {p.id === currentPhaseId ? ' (itself)' : ''}
           </option>
         ))}
       </select>
 
-      {step.type === 'add_resource' && (
-        <span className="step-fields">
-          <EntityPicker
-            entities={resources}
-            value={step.resourceId}
-            onChange={(resourceId) => onChange({ ...step, resourceId })}
-            onCreate={(name) => createResource(name)}
-            placeholder="resource name"
+      {transition.condition ? (
+        <>
+          <span className="step-word">on</span>
+          <ConditionFields
+            condition={transition.condition}
+            onChange={(condition) => onChange({ ...transition, condition })}
+            variables={variables}
+            createVariable={createVariable}
           />
-          <span className="step-word">by</span>
-          <input
-            type="number"
-            className="step-number"
-            value={step.amount}
-            onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
-          />
-        </span>
-      )}
-
-      {step.type === 'change_variable' && (
-        <span className="step-fields">
-          <EntityPicker
-            entities={variables}
-            value={step.variableId}
-            onChange={(variableId) => onChange({ ...step, variableId })}
-            onCreate={(name) => createVariable(name)}
-            placeholder="variable name"
-          />
-          <select value={step.op} onChange={(e) => onChange({ ...step, op: e.target.value })}>
-            <option value="set">set to</option>
-            <option value="add">add</option>
-          </select>
-          <input
-            type="number"
-            className="step-number"
-            value={step.amount}
-            onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
-          />
-        </span>
-      )}
-
-      {step.type === 'call_function' && (
-        <span className="step-fields">
-          <input
-            placeholder="function name"
-            value={step.functionName}
-            onChange={(e) => onChange({ ...step, functionName: e.target.value })}
-          />
-        </span>
+          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: null })}>
+            remove condition
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="step-word step-word-muted">(always)</span>
+          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: newCondition() })}>
+            + on condition…
+          </button>
+        </>
       )}
 
       <button className="btn btn-sm btn-danger" onClick={onRemove}>
         ✕
       </button>
-    </div>
-  );
-}
-
-function LoopEditor({ phase, phases, variables, onChange, createVariable }) {
-  const otherPhases = phases.filter((p) => p.id !== phase.id);
-  const loop = phase.loop;
-  const looping = !!loop.targetPhaseId;
-
-  return (
-    <div className="loop-editor">
-      <div className="loop-editor-title">Loop</div>
-      <div className="loop-row">
-        <span className="step-word">Loop back to</span>
-        <select
-          value={loop.targetPhaseId}
-          onChange={(e) => onChange({ ...loop, targetPhaseId: e.target.value })}
-        >
-          <option value="">don't loop</option>
-          {otherPhases.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {looping && (
-        <div className="loop-row">
-          <span className="step-word">Break the loop when</span>
-          <EntityPicker
-            entities={variables}
-            value={loop.breakVariableId}
-            onChange={(breakVariableId) => onChange({ ...loop, breakVariableId })}
-            onCreate={(name) => createVariable(name)}
-            placeholder="variable name"
-          />
-          <select value={loop.breakOp} onChange={(e) => onChange({ ...loop, breakOp: e.target.value })}>
-            {OPERATORS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <input
-            className="step-number"
-            value={loop.breakValue}
-            onChange={(e) => onChange({ ...loop, breakValue: e.target.value })}
-          />
-        </div>
-      )}
-      {!looping && <div className="loop-hint">This phase flows into the next one in order.</div>}
     </div>
   );
 }
@@ -201,7 +245,11 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
     setSelectedId(p.id);
   };
   const removePhase = (id) => {
-    setPhases(phases.filter((p) => p.id !== id).map((p) => (p.loop.targetPhaseId === id ? { ...p, loop: { ...p.loop, targetPhaseId: '' } } : p)));
+    setPhases(
+      phases
+        .filter((p) => p.id !== id)
+        .map((p) => ({ ...p, transitions: p.transitions.filter((t) => t.targetPhaseId !== id) }))
+    );
     if (selectedId === id) setSelectedId(null);
   };
 
@@ -209,16 +257,28 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
   const updateStep = (stepId, next) => updatePhase(selected.id, { steps: selected.steps.map((s) => (s.id === stepId ? next : s)) });
   const removeStep = (stepId) => updatePhase(selected.id, { steps: selected.steps.filter((s) => s.id !== stepId) });
 
+  const addTransition = () => updatePhase(selected.id, { transitions: [...selected.transitions, newTransition()] });
+  const updateTransition = (transId, next) =>
+    updatePhase(selected.id, { transitions: selected.transitions.map((t) => (t.id === transId ? next : t)) });
+  const removeTransition = (transId) =>
+    updatePhase(selected.id, { transitions: selected.transitions.filter((t) => t.id !== transId) });
+
+  const conditionSummary = (condition) => {
+    const v = variables.find((x) => x.id === condition.variableId);
+    return `${v?.name ?? 'variable'} ${OPERATORS.find((o) => o.value === condition.op)?.label ?? condition.op} ${condition.value}`;
+  };
+
   const stepSummary = (step) => {
+    const prefix = step.condition ? `if ${conditionSummary(step.condition)} → ` : '';
     if (step.type === 'add_resource') {
       const r = resources.find((x) => x.id === step.resourceId);
-      return `+${step.amount} ${r?.name ?? 'resource'}`;
+      return `${prefix}+${step.amount} ${r?.name ?? 'resource'}`;
     }
     if (step.type === 'change_variable') {
       const v = variables.find((x) => x.id === step.variableId);
-      return `${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
+      return `${prefix}${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
     }
-    return `call ${step.functionName || '…'}`;
+    return `${prefix}call ${step.functionName || '…'}`;
   };
 
   return (
@@ -246,13 +306,12 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                     ))}
                   </div>
                 )}
-                {phase.loop.targetPhaseId && (
-                  <div className="phase-loop-badge">
-                    ⟲ loops to "{phases.find((p) => p.id === phase.loop.targetPhaseId)?.name}" until{' '}
-                    {variables.find((v) => v.id === phase.loop.breakVariableId)?.name ?? 'variable'}{' '}
-                    {OPERATORS.find((o) => o.value === phase.loop.breakOp)?.label} {phase.loop.breakValue}
+                {phase.transitions.map((t) => (
+                  <div className="phase-transition-badge" key={t.id}>
+                    → {phases.find((p) => p.id === t.targetPhaseId)?.name ?? '…'}
+                    {t.condition ? ` on ${conditionSummary(t.condition)}` : ' (always)'}
                   </div>
-                )}
+                ))}
               </button>
             </div>
           ))}
@@ -301,13 +360,25 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
               </div>
 
               <div className="phase-editor-section">
-                <LoopEditor
-                  phase={selected}
-                  phases={phases}
-                  variables={variables}
-                  createVariable={createVariable}
-                  onChange={(loop) => updatePhase(selected.id, { loop })}
-                />
+                <div className="phase-editor-section-title">Next Phase</div>
+                {selected.transitions.length === 0 && (
+                  <div className="empty-hint">No transitions set — this phase just flows into the next one in the list above.</div>
+                )}
+                {selected.transitions.map((t) => (
+                  <TransitionRow
+                    key={t.id}
+                    transition={t}
+                    phases={phases}
+                    currentPhaseId={selected.id}
+                    variables={variables}
+                    createVariable={createVariable}
+                    onChange={(next) => updateTransition(t.id, next)}
+                    onRemove={() => removeTransition(t.id)}
+                  />
+                ))}
+                <button className="btn btn-sm" onClick={addTransition}>
+                  + Add Transition
+                </button>
               </div>
             </>
           )}

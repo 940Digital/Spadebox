@@ -235,14 +235,6 @@ select {
   padding: 2px 8px;
   color: var(--text-dim);
 }
-.phase-loop-badge {
-  font-size: 11px;
-  color: var(--accent);
-  background: #fff;
-  border: 1px dashed var(--accent);
-  border-radius: 6px;
-  padding: 4px 8px;
-}
 .add-phase-btn {
   margin-top: 4px;
   width: 100%;
@@ -282,16 +274,23 @@ select {
 }
 .step-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
   margin-bottom: 6px;
+}
+.step-condition-row,
+.step-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
-.step-fields {
+.step-fields,
+.condition-fields {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -301,34 +300,38 @@ select {
   color: var(--text-dim);
   font-size: 12px;
 }
+.step-word-muted {
+  font-style: italic;
+  opacity: 0.7;
+}
 .step-number {
   width: 70px;
 }
 .entity-picker-input {
   width: 140px;
 }
-.loop-editor {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
+.add-condition-btn {
+  align-self: flex-start;
 }
-.loop-editor-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 8px;
-}
-.loop-row {
+
+/* --- transitions (next phase) --- */
+.transition-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
   margin-bottom: 6px;
 }
-.loop-hint {
-  color: var(--text-dim);
-  font-size: 12px;
+.phase-transition-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: #fff;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  text-align: left;
 }
