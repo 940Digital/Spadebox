@@ -1,40 +1,17 @@
 // Minimal shared state for the sandbox. Lifted into App.jsx and passed down
 // as props — no context/reducer machinery yet, kept deliberately simple
 // since we're rebuilding from scratch and more sections are coming later.
+//
+// The UI here only manages data and layout: cards, resources, positions.
+// Actual game behavior is written as real JavaScript in the Code tab
+// against the engine API (see engine.js) — there's no visual logic
+// builder anymore.
 
 let counter = 0;
 export function uid(prefix) {
   counter += 1;
   return `${prefix}_${Date.now().toString(36)}_${counter.toString(36)}`;
 }
-
-export const OPERATORS = [
-  { value: '==', label: 'equals' },
-  { value: '!=', label: 'does not equal' },
-  { value: '>', label: 'is greater than' },
-  { value: '<', label: 'is less than' },
-  { value: '>=', label: 'is greater or equal to' },
-  { value: '<=', label: 'is less or equal to' },
-];
-
-// Every kind of step a phase can contain. This is the exact list the
-// "Add Step" side panel offers — nothing more, nothing less. Resources are
-// no longer touched from a phase — they're set up entirely in the
-// Resources tab now.
-export const STEP_TYPES = [
-  { value: 'condition', label: 'Condition' },
-  { value: 'variable', label: 'Variable' },
-  { value: 'deal', label: 'Deal' },
-  { value: 'shuffle', label: 'Shuffle' },
-  { value: 'discard', label: 'Discard' },
-  { value: 'show', label: 'Show' },
-  { value: 'hide', label: 'Hide' },
-];
-
-export const CARD_ZONES = [
-  { value: 'hand', label: 'Hand' },
-  { value: 'deck', label: 'Deck' },
-];
 
 // The exact set of kinds the "+ Add Resource" picker offers.
 export const RESOURCE_KINDS = [
@@ -44,10 +21,8 @@ export const RESOURCE_KINDS = [
   { value: 'hand', label: 'Hand' },
 ];
 
-export const FUNCTION_ACTIONS = [{ value: 'reject', label: 'Reject' }];
-
 export function newResource(name = 'New Resource', value = 0) {
-  return { id: uid('resource'), name, value: Number(value) || 0, functions: [] };
+  return { id: uid('resource'), name, value: Number(value) || 0 };
 }
 
 export function newVariable(name = 'New Variable', value = 0) {
@@ -58,44 +33,28 @@ export function newPlayer(name = 'Player') {
   return { id: uid('player'), name };
 }
 
-// Decks, discards and hands are the connectable pieces of the table: a
-// discard can feed back into a deck, a hand can discard into a discard
-// pile, and a hand can belong to a player. Each can also carry functions —
-// small rules like "reject this move unless X matches Y".
+// Decks, discards and hands are the connectable, card-holding pieces of
+// the table: a discard can feed back into a deck, a hand can discard into
+// a discard pile, and a hand can belong to a player. `cardCounts` is the
+// starting composition — { cardDefId: quantity } — expanded into an
+// actual stack of cards when a play session starts (see engine.js).
 export function newDeck(name = 'New Deck') {
-  return { id: uid('deck'), name, reshuffleFromDiscardId: '', functions: [] };
+  return { id: uid('deck'), name, reshuffleFromDiscardId: '', cardCounts: {} };
 }
 
 export function newDiscard(name = 'New Discard') {
-  return { id: uid('discard'), name, connectsToDeckId: '', functions: [] };
+  return { id: uid('discard'), name, connectsToDeckId: '', cardCounts: {} };
 }
 
 export function newHand(name = 'New Hand') {
-  return { id: uid('hand'), name, playerId: '', discardId: '', functions: [] };
-}
-
-// A field reference is "(attribute) of (card source)" — the card source is
-// either the active card (the one being played/checked) or the top card of
-// a named deck/discard/hand. sourceRef encodes the latter as "top:<id>".
-export function newFieldRef() {
-  return { attrId: '', source: 'active_card' };
-}
-
-export function newFunctionClause() {
-  return { id: uid('fnclause'), left: newFieldRef(), op: '==', right: newFieldRef() };
-}
-
-// A function is "if [not] <clauses> then <action>" — e.g. "if not this
-// card's Color equals the top card of Discard's Color, then reject".
-export function newResourceFunction() {
-  return { id: uid('fn'), negate: true, clauses: [newFunctionClause()], combine: 'and', action: 'reject' };
+  return { id: uid('hand'), name, playerId: '', discardId: '', cardCounts: {} };
 }
 
 // An attribute is a shared property definition every card has a slot for —
 // like a spreadsheet column ("Color", "Number", "Suit"). Every card fills
 // in its own value; there's no picking which attributes apply, since they
 // all do. This is what lets "if this card's Suit equals that card's Suit"
-// mean something, which a plain grouping/tag never could.
+// mean something in code, which a plain grouping/tag never could.
 export function newCardAttribute(name = 'New Attribute') {
   return { id: uid('attr'), name };
 }
@@ -104,145 +63,77 @@ export function newCard(name = 'New Card') {
   return { id: uid('card'), name, description: '', color: '#ffffff', attributes: {} };
 }
 
-// A condition clause is always variable-based: no other kind can gate a
-// step or a transition yet.
-export function newConditionClause() {
-  return { id: uid('clause'), variableId: '', op: '==', value: '' };
-}
-
-export function newStep(type) {
-  const base = { id: uid('step'), type };
-  switch (type) {
-    case 'variable':
-      return { ...base, variableId: '', op: 'set', amount: 0 };
-    case 'deal':
-      return { ...base, fromZone: 'deck', toZone: 'hand', count: 1 };
-    case 'shuffle':
-      return base; // only the deck can be shuffled right now — nothing to configure
-    case 'discard':
-      return base;
-    case 'show':
-    case 'hide':
-      return { ...base, count: 'all', zone: 'hand' };
-    case 'condition':
-    default:
-      // A container: picking it just gives you somewhere to nest more
-      // steps. Clauses combine with and/or, plus an optional else branch.
-      // Nothing stops a condition's own then/else lists from containing
-      // another condition, which is how you loop something inside itself
-      // indefinitely.
-      return {
-        ...base,
-        type: 'condition',
-        clauses: [newConditionClause()],
-        combine: 'and', // 'and' | 'or'
-        thenSteps: [],
-        elseSteps: null, // null = no else branch yet
-      };
-  }
-}
-
-// A transition is "next phase: X on condition Y" — an empty condition
-// (no variable picked) just means it always fires. A phase can have
-// several, evaluated in order; the first whose condition is met (or is
-// empty) wins. Pointing a transition at an earlier phase (or itself) is
-// how looping works — a phase can loop forever inside itself this way.
-export function newTransition(targetPhaseId = '') {
-  return { id: uid('transition'), targetPhaseId, condition: newConditionClause() };
-}
-
+// A phase is just a named step in the general turn sequence now — a label
+// to write code against (e.g. `game.phase === 'Draw'`), not a container
+// for logic. Nothing here is executable; the Code tab is.
 export function newPhase(name = 'New Phase') {
-  return {
-    id: uid('phase'),
-    name,
-    steps: [],
-    transitions: [],
-  };
+  return { id: uid('phase'), name };
 }
 
 const STORAGE_KEY = 'spadebox:state';
 
-// Converts one old-shape step into the current shape. Recurses into a
-// condition's then/else branches, since those can hold old-shape steps too.
-// "Add Resource" steps have no replacement — resources are configured in
-// the Resources tab now, so those steps are simply dropped.
-function migrateStep(s) {
-  if (s.type === 'condition') {
-    return {
-      ...s,
-      thenSteps: (s.thenSteps ?? []).map(migrateStep).filter(Boolean),
-      elseSteps: s.elseSteps ? s.elseSteps.map(migrateStep).filter(Boolean) : null,
-    };
-  }
-  if (s.type === 'change_variable') {
-    return { id: s.id, type: 'variable', variableId: s.variableId ?? '', op: s.op ?? 'set', amount: s.amount ?? 0 };
-  }
-  if (s.type === 'add_resource') return null;
-  if (s.type === 'function') {
-    if (s.functionKind === 'add_resource') return null;
-    return null;
-  }
-  if (s.condition) {
-    // Oldest shape: a flat step with an attached `condition` — wrap it.
-    const { condition, ...flat } = s;
-    const migratedFlat = migrateStep(flat);
-    if (!migratedFlat) return null;
-    return {
-      id: uid('step'),
-      type: 'condition',
-      clauses: [{ id: uid('clause'), ...condition }],
-      combine: 'and',
-      thenSteps: [migratedFlat],
-      elseSteps: null,
-    };
-  }
-  return s; // already current-shape
-}
+const DEFAULT_CODE = `// Write real JavaScript here against the built-in \`game\` API.
+// Everything below is optional starter code — replace it with your own.
+//
+// game.shuffle(zoneName)
+// game.draw(fromZoneName, toZoneName, count)
+// game.deal(fromZoneName, count)            // deals to every hand
+// game.topCard(zoneName)                    // -> card def id, or null
+// game.moveCard(cardId, fromZoneName, toZoneName)
+// game.hide(zoneName) / game.show(zoneName) // face down / face up
+// game.attr(cardId, attributeName)          // read a card's attribute
+// game.cardName(cardId)
+// game.getVar(name) / game.setVar(name, value)
+// game.players                              // [{ id, name }]
+// game.on(eventName, handler)               // register a background rule
+// game.reject(reason)                       // call inside a handler to block a move
+// game.log(message)
 
-// Upgrades state saved by older versions of the app.
+game.on('cardPlayed', ({ card, from, to }) => {
+  const topOfDiscard = game.topCard('Discard');
+  if (!topOfDiscard) return; // nothing to match yet
+  const sameColor = game.attr(card, 'Color') === game.attr(topOfDiscard, 'Color');
+  const sameNumber = game.attr(card, 'Number') === game.attr(topOfDiscard, 'Number');
+  if (!sameColor && !sameNumber) {
+    game.reject(\`\${game.cardName(card)} doesn't match the top of the discard pile\`);
+  }
+});
+`;
+
+// Upgrades state saved by older versions of the app. Anything from the
+// retired Phases step-builder or resource Functions builder has no
+// equivalent anymore — it's just dropped, keeping names where sensible.
 function normalize(state) {
-  const migrateTransition = (t) => ({ ...t, condition: t.condition ?? newConditionClause() });
+  const migratePhase = (p) => ({ id: p.id, name: p.name });
 
-  const migratePhase = (p) => {
-    if (p.transitions) return { ...p, steps: (p.steps ?? []).map(migrateStep).filter(Boolean), transitions: p.transitions.map(migrateTransition) };
-    const legacyLoop = p.loop;
-    const transitions = legacyLoop?.targetPhaseId
-      ? [
-          {
-            id: uid('transition'),
-            targetPhaseId: legacyLoop.targetPhaseId,
-            condition: legacyLoop.breakVariableId
-              ? { variableId: legacyLoop.breakVariableId, op: legacyLoop.breakOp, value: legacyLoop.breakValue }
-              : newConditionClause(),
-          },
-        ]
-      : [];
-    const { loop, ...rest } = p;
-    return { ...rest, steps: (p.steps ?? []).map(migrateStep).filter(Boolean), transitions };
-  };
+  const migrateZone = (z) => ({
+    id: z.id,
+    name: z.name,
+    ...(('reshuffleFromDiscardId' in z) && { reshuffleFromDiscardId: z.reshuffleFromDiscardId }),
+    ...(('connectsToDeckId' in z) && { connectsToDeckId: z.connectsToDeckId }),
+    ...(('playerId' in z) && { playerId: z.playerId }),
+    ...(('discardId' in z) && { discardId: z.discardId }),
+    cardCounts: z.cardCounts ?? {},
+  });
 
-  // Cards from before the attributes rework had `classIds` and no
-  // `attributes` map — classes had no value-based equivalent, so they're
-  // just dropped; the card keeps its name/color/description.
   const migrateCard = (c) => {
     if (c.attributes) return c;
     const { classIds, ...rest } = c;
     return { ...rest, attributes: {} };
   };
 
-  const withFunctions = (entry) => ({ functions: [], ...entry });
-
   return {
-    resources: (state.resources ?? []).map(withFunctions),
+    resources: state.resources ?? [],
     variables: state.variables ?? [],
     phases: (state.phases ?? []).map(migratePhase),
     players: state.players ?? [],
-    decks: (state.decks ?? []).map(withFunctions),
-    discards: (state.discards ?? []).map(withFunctions),
-    hands: (state.hands ?? []).map(withFunctions),
+    decks: (state.decks ?? []).map(migrateZone),
+    discards: (state.discards ?? []).map(migrateZone),
+    hands: (state.hands ?? []).map(migrateZone),
     cardAttributes: state.cardAttributes ?? [],
     cards: (state.cards ?? []).map(migrateCard),
     layout: state.layout ?? {},
+    code: typeof state.code === 'string' ? state.code : DEFAULT_CODE,
   };
 }
 
@@ -264,6 +155,7 @@ export function loadInitialState() {
     cardAttributes: [],
     cards: [],
     layout: {},
+    code: DEFAULT_CODE,
   };
 }
 

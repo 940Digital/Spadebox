@@ -1,16 +1,5 @@
 import { useState } from 'react';
-import {
-  FUNCTION_ACTIONS,
-  newDeck,
-  newDiscard,
-  newFunctionClause,
-  newHand,
-  newPlayer,
-  newResource,
-  newResourceFunction,
-  OPERATORS,
-  RESOURCE_KINDS,
-} from './store';
+import { newDeck, newDiscard, newHand, newPlayer, newResource, RESOURCE_KINDS } from './store';
 
 function Section({ title, children }) {
   return (
@@ -59,112 +48,39 @@ function ResourcePicker({ onSelect, onClose }) {
   );
 }
 
-// "(attribute) of (card source)" — the source is either the active card
-// (the one being checked) or the top card of a named deck/discard/hand.
-function FieldRefEditor({ value, onChange, cardAttributes, cardSources }) {
-  return (
-    <span className="condition-fields">
-      <select value={value.attrId} onChange={(e) => onChange({ ...value, attrId: e.target.value })}>
-        <option value="" disabled>
-          attribute…
-        </option>
-        {cardAttributes.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
-        ))}
-      </select>
-      <span className="step-word">of</span>
-      <select value={value.source} onChange={(e) => onChange({ ...value, source: e.target.value })}>
-        <option value="active_card">Active Card</option>
-        {cardSources.map((s) => (
-          <option key={s.value} value={s.value}>
-            {s.label}
-          </option>
-        ))}
-      </select>
-    </span>
-  );
-}
+// The starting composition of a card-holding zone — "how many of each
+// card does this pile start with". This is what the engine expands into
+// an actual stack when a play session starts (see engine.js).
+function CardCountsEditor({ cardCounts, onChange, cards }) {
+  const setQty = (cardId, qty) => {
+    const n = Math.max(0, Number(qty) || 0);
+    const next = { ...cardCounts };
+    if (n === 0) delete next[cardId];
+    else next[cardId] = n;
+    onChange(next);
+  };
 
-function FunctionRule({ fn, onChange, onRemove, cardAttributes, cardSources }) {
+  if (cards.length === 0) return <div className="empty-hint">No cards defined yet — add some in the Cards tab.</div>;
+
   return (
-    <div className="function-rule">
-      <div className="function-rule-head">
-        <label className="bulk-select-all">
-          <input type="checkbox" checked={fn.negate} onChange={(e) => onChange({ ...fn, negate: e.target.checked })} />
-          If not
-        </label>
-        <span className="step-word">then</span>
-        <select value={fn.action} onChange={(e) => onChange({ ...fn, action: e.target.value })}>
-          {FUNCTION_ACTIONS.map((a) => (
-            <option key={a.value} value={a.value}>
-              {a.label}
-            </option>
-          ))}
-        </select>
-        <button className="icon-btn danger" title="Remove function" onClick={onRemove}>
-          ✕
-        </button>
-      </div>
-      <div className="clause-list">
-        {fn.clauses.map((clause, i) => (
-          <div className="clause-row" key={clause.id}>
-            {i > 0 && (
-              <select className="combine-select" value={fn.combine} onChange={(e) => onChange({ ...fn, combine: e.target.value })}>
-                <option value="and">AND</option>
-                <option value="or">OR</option>
-              </select>
-            )}
-            <FieldRefEditor
-              value={clause.left}
-              onChange={(left) => onChange({ ...fn, clauses: fn.clauses.map((c) => (c.id === clause.id ? { ...c, left } : c)) })}
-              cardAttributes={cardAttributes}
-              cardSources={cardSources}
-            />
-            <select value={clause.op} onChange={(e) => onChange({ ...fn, clauses: fn.clauses.map((c) => (c.id === clause.id ? { ...c, op: e.target.value } : c)) })}>
-              {OPERATORS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <FieldRefEditor
-              value={clause.right}
-              onChange={(right) => onChange({ ...fn, clauses: fn.clauses.map((c) => (c.id === clause.id ? { ...c, right } : c)) })}
-              cardAttributes={cardAttributes}
-              cardSources={cardSources}
-            />
-            {fn.clauses.length > 1 && (
-              <button
-                className="icon-btn danger"
-                title="Remove condition"
-                onClick={() => onChange({ ...fn, clauses: fn.clauses.filter((c) => c.id !== clause.id) })}
-              >
-                ✕
-              </button>
-            )}
-            {i === fn.clauses.length - 1 && (
-              <button
-                className="icon-btn"
-                title="Add another condition (AND/OR)"
-                onClick={() => onChange({ ...fn, clauses: [...fn.clauses, newFunctionClause()] })}
-              >
-                +
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+    <div className="resource-list">
+      {cards.map((c) => (
+        <div className="connect-row" key={c.id}>
+          <span className="resource-name">{c.name}</span>
+          <input
+            type="number"
+            className="step-number"
+            min="0"
+            value={cardCounts[c.id] ?? 0}
+            onChange={(e) => setQty(c.id, e.target.value)}
+          />
+        </div>
+      ))}
     </div>
   );
 }
 
-function ResourceEditor({ item, kind, onChange, onDelete, onClose, connectOptions, cardAttributes, cardSources }) {
-  const addFunction = () => onChange({ ...item, functions: [...item.functions, newResourceFunction()] });
-  const updateFunction = (id, next) => onChange({ ...item, functions: item.functions.map((f) => (f.id === id ? next : f)) });
-  const removeFunction = (id) => onChange({ ...item, functions: item.functions.filter((f) => f.id !== id) });
-
+function ResourceEditor({ item, kind, onChange, onDelete, onClose, connectOptions, cards }) {
   return (
     <div className="side-panel-backdrop" onClick={onClose}>
       <div className="side-panel wide" onClick={(e) => e.stopPropagation()}>
@@ -211,25 +127,12 @@ function ResourceEditor({ item, kind, onChange, onDelete, onClose, connectOption
             </>
           )}
 
-          <div className="field-label">
-            Functions
-            {item.functions.length === 0 && <div className="empty-hint">No functions yet.</div>}
-            <div className="step-list">
-              {item.functions.map((fn) => (
-                <FunctionRule
-                  key={fn.id}
-                  fn={fn}
-                  onChange={(next) => updateFunction(fn.id, next)}
-                  onRemove={() => removeFunction(fn.id)}
-                  cardAttributes={cardAttributes}
-                  cardSources={cardSources}
-                />
-              ))}
-              <button className="add-pill" onClick={addFunction}>
-                + Function
-              </button>
+          {kind !== 'resource' && (
+            <div className="field-label">
+              Starting Cards
+              <CardCountsEditor cardCounts={item.cardCounts} onChange={(cardCounts) => onChange({ ...item, cardCounts })} cards={cards} />
             </div>
-          </div>
+          )}
 
           <button className="btn btn-danger" onClick={onDelete}>
             Delete {RESOURCE_KINDS.find((k) => k.value === kind)?.label}
@@ -251,7 +154,7 @@ export default function ResourcesPage({
   setDiscards,
   hands,
   setHands,
-  cardAttributes,
+  cards,
 }) {
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState(null); // { kind, id }
@@ -293,12 +196,6 @@ export default function ResourcesPage({
     setEditing(null);
   };
 
-  const cardSources = [
-    ...decks.map((d) => ({ value: `top:${d.id}`, label: `Top Card of ${d.name} (Deck)` })),
-    ...discards.map((d) => ({ value: `top:${d.id}`, label: `Top Card of ${d.name} (Discard)` })),
-    ...hands.map((h) => ({ value: `top:${h.id}`, label: `Top Card of ${h.name} (Hand)` })),
-  ];
-
   const editingItem = editing ? listFor(editing.kind).find((i) => i.id === editing.id) : null;
 
   return (
@@ -338,7 +235,9 @@ export default function ResourcesPage({
             {items.map((item) => (
               <button className="connect-row resource-open-row" key={item.id} onClick={() => setEditing({ kind, id: item.id })}>
                 <span className="resource-name">{item.name}</span>
-                {item.functions?.length > 0 && <span className="phase-chip">{item.functions.length} function{item.functions.length === 1 ? '' : 's'}</span>}
+                {kind !== 'resource' && Object.keys(item.cardCounts ?? {}).length > 0 && (
+                  <span className="phase-chip">{Object.values(item.cardCounts).reduce((a, b) => a + b, 0)} cards</span>
+                )}
               </button>
             ))}
           </div>
@@ -355,8 +254,7 @@ export default function ResourcesPage({
           onDelete={() => removeItem(editing.kind, editingItem.id)}
           onClose={() => setEditing(null)}
           connectOptions={{ decks, discards, players }}
-          cardAttributes={cardAttributes}
-          cardSources={cardSources}
+          cards={cards}
         />
       )}
     </div>

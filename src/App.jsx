@@ -5,6 +5,7 @@ import ResourcesPage from './ResourcesPage';
 import CardsPage from './CardsPage';
 import TablePage from './TablePage';
 import VariablesPage from './VariablesPage';
+import CodePage from './CodePage';
 
 const NAV_ITEMS = [
   { id: 'phases', label: 'Phases' },
@@ -12,6 +13,7 @@ const NAV_ITEMS = [
   { id: 'cards', label: 'Cards' },
   { id: 'variables', label: 'Variables' },
   { id: 'table', label: 'Table' },
+  { id: 'code', label: 'Code' },
 ];
 
 export default function App() {
@@ -27,10 +29,11 @@ export default function App() {
   const [cardAttributes, setCardAttributes] = useState(initial.cardAttributes);
   const [cards, setCards] = useState(initial.cards);
   const [layout, setLayout] = useState(initial.layout);
+  const [code, setCode] = useState(initial.code);
 
   useEffect(() => {
-    saveState({ resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout });
-  }, [resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout]);
+    saveState({ resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout, code });
+  }, [resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout, code]);
 
   return (
     <div className="sheet">
@@ -46,7 +49,7 @@ export default function App() {
         ))}
       </nav>
       <main className="sheet-content">
-        {active === 'phases' && <PhasesPage phases={phases} setPhases={setPhases} variables={variables} setVariables={setVariables} />}
+        {active === 'phases' && <PhasesPage phases={phases} setPhases={setPhases} />}
         {active === 'resources' && (
           <ResourcesPage
             resources={resources}
@@ -59,7 +62,7 @@ export default function App() {
             setDiscards={setDiscards}
             hands={hands}
             setHands={setHands}
-            cardAttributes={cardAttributes}
+            cards={cards}
           />
         )}
         {active === 'cards' && (
@@ -68,6 +71,19 @@ export default function App() {
         {active === 'variables' && <VariablesPage variables={variables} setVariables={setVariables} />}
         {active === 'table' && (
           <TablePage resources={resources} decks={decks} discards={discards} hands={hands} layout={layout} setLayout={setLayout} />
+        )}
+        {active === 'code' && (
+          <CodePage
+            code={code}
+            setCode={setCode}
+            players={players}
+            decks={decks}
+            discards={discards}
+            hands={hands}
+            cards={cards}
+            cardAttributes={cardAttributes}
+            variables={variables}
+          />
         )}
       </main>
     </div>
