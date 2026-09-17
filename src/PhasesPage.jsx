@@ -1,15 +1,5 @@
 import { useState } from 'react';
-import {
-  FUNCTION_KINDS,
-  newConditionClause,
-  newPhase,
-  newResource,
-  newStep,
-  newTransition,
-  newVariable,
-  OPERATORS,
-  STEP_TYPES,
-} from './store';
+import { CARD_ZONES, newConditionClause, newPhase, newResource, newStep, newTransition, newVariable, OPERATORS, STEP_TYPES } from './store';
 
 function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   const [creating, setCreating] = useState(false);
@@ -63,6 +53,38 @@ function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   );
 }
 
+function ZoneSelect({ value, onChange }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      {CARD_ZONES.map((z) => (
+        <option key={z.value} value={z.value}>
+          {z.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function CountControl({ count, onChange }) {
+  const isAll = count === 'all';
+  return (
+    <span className="step-fields">
+      <select value={isAll ? 'all' : 'number'} onChange={(e) => onChange(e.target.value === 'all' ? 'all' : 1)}>
+        <option value="all">All</option>
+        <option value="number">#</option>
+      </select>
+      {!isAll && (
+        <input
+          type="number"
+          className="step-number"
+          value={count}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+      )}
+    </span>
+  );
+}
+
 // One "[variable] [operator] [value]" clause — shared by a condition step's
 // clause list and a phase transition's condition.
 function ClauseFields({ clause, onChange, variables, createVariable }) {
@@ -93,42 +115,70 @@ function clauseSummary(clause, variables, emptyLabel = 'not set') {
   return `${v?.name ?? 'variable'} ${OPERATORS.find((o) => o.value === clause.op)?.label ?? clause.op} ${clause.value}`;
 }
 
+const ZONE_LABEL = (value) => CARD_ZONES.find((z) => z.value === value)?.label ?? value;
+const STEP_LABEL = (type) => STEP_TYPES.find((t) => t.value === type)?.label ?? type;
+
 function stepSummary(step, resources, variables) {
-  if (step.type === 'variable') {
-    const v = variables.find((x) => x.id === step.variableId);
-    return `${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
-  }
-  if (step.type === 'function') {
-    if (step.functionKind === 'add_resource') {
+  switch (step.type) {
+    case 'variable': {
+      const v = variables.find((x) => x.id === step.variableId);
+      return `${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
+    }
+    case 'add_resource': {
       const r = resources.find((x) => x.id === step.resourceId);
       return `+${step.amount} ${r?.name ?? 'resource'}`;
     }
-    return `call ${step.functionName || '…'}`;
+    case 'deal':
+      return `Deal ${step.count} from ${ZONE_LABEL(step.fromZone)} to ${ZONE_LABEL(step.toZone)}`;
+    case 'shuffle':
+      return 'Shuffle the Deck';
+    case 'discard':
+      return 'Discard';
+    case 'show':
+      return `Show ${step.count === 'all' ? 'all' : step.count} from ${ZONE_LABEL(step.zone)}`;
+    case 'hide':
+      return `Hide ${step.count === 'all' ? 'all' : step.count} from ${ZONE_LABEL(step.zone)}`;
+    case 'condition': {
+      const joiner = step.combine === 'or' ? ' OR ' : ' AND ';
+      const cond = step.clauses.map((c) => clauseSummary(c, variables)).join(joiner);
+      const thenCount = step.thenSteps.length;
+      const elseCount = step.elseSteps ? step.elseSteps.length : 0;
+      return `if ${cond} → ${thenCount} step${thenCount === 1 ? '' : 's'}${step.elseSteps ? `, else ${elseCount} step${elseCount === 1 ? '' : 's'}` : ''}`;
+    }
+    default:
+      return step.type;
   }
-  const joiner = step.combine === 'or' ? ' OR ' : ' AND ';
-  const cond = step.clauses.map((c) => clauseSummary(c, variables)).join(joiner);
-  const thenCount = step.thenSteps.length;
-  const elseCount = step.elseSteps ? step.elseSteps.length : 0;
-  return `if ${cond} → ${thenCount} step${thenCount === 1 ? '' : 's'}${step.elseSteps ? `, else ${elseCount} step${elseCount === 1 ? '' : 's'}` : ''}`;
 }
 
-// A step can be a Variable change, a Function call (Add Resource is just a
-// built-in function), or a Condition — and a Condition is a container:
-// picking it just gives you somewhere to nest more steps, including more
-// conditions, which is how you can loop something inside itself.
-function StepNode({ step, onChange, onRemove, resources, variables, createResource, createVariable }) {
-  const changeType = (type) => onChange(type === step.type ? step : { ...newStep(type), id: step.id });
+// A side panel of every step kind there is — opened by any "+ Step"
+// button. Picking one adds it exactly where that button lives.
+function StepPicker({ onSelect, onClose }) {
+  return (
+    <div className="step-picker-backdrop" onClick={onClose}>
+      <div className="step-picker-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="step-picker-head">
+          <span>Add Step</span>
+          <button className="icon-btn" title="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="step-picker-list">
+          {STEP_TYPES.map((t) => (
+            <button key={t.value} className="step-picker-option" onClick={() => onSelect(t.value)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
+function StepNode({ step, onChange, onRemove, resources, variables, createResource, createVariable, openPicker }) {
   return (
     <div className={`step-node${step.type === 'condition' ? ' step-node-condition' : ''}`}>
       <div className="step-head-row">
-        <select value={step.type} onChange={(e) => changeType(e.target.value)}>
-          {STEP_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+        <span className="step-type-badge">{STEP_LABEL(step.type)}</span>
 
         {step.type === 'variable' && (
           <span className="step-fields">
@@ -152,39 +202,46 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
           </span>
         )}
 
-        {step.type === 'function' && (
+        {step.type === 'add_resource' && (
           <span className="step-fields">
-            <select value={step.functionKind} onChange={(e) => onChange({ ...step, functionKind: e.target.value })}>
-              {FUNCTION_KINDS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            {step.functionKind === 'add_resource' ? (
-              <>
-                <EntityPicker
-                  entities={resources}
-                  value={step.resourceId}
-                  onChange={(resourceId) => onChange({ ...step, resourceId })}
-                  onCreate={(name) => createResource(name)}
-                  placeholder="resource name"
-                />
-                <span className="step-word">by</span>
-                <input
-                  type="number"
-                  className="step-number"
-                  value={step.amount}
-                  onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
-                />
-              </>
-            ) : (
-              <input
-                placeholder="function name"
-                value={step.functionName}
-                onChange={(e) => onChange({ ...step, functionName: e.target.value })}
-              />
-            )}
+            <EntityPicker
+              entities={resources}
+              value={step.resourceId}
+              onChange={(resourceId) => onChange({ ...step, resourceId })}
+              onCreate={(name) => createResource(name)}
+              placeholder="resource name"
+            />
+            <span className="step-word">by</span>
+            <input
+              type="number"
+              className="step-number"
+              value={step.amount}
+              onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
+            />
+          </span>
+        )}
+
+        {step.type === 'deal' && (
+          <span className="step-fields">
+            <span className="step-word">from</span>
+            <ZoneSelect value={step.fromZone} onChange={(fromZone) => onChange({ ...step, fromZone })} />
+            <span className="step-word">to</span>
+            <ZoneSelect value={step.toZone} onChange={(toZone) => onChange({ ...step, toZone })} />
+            <span className="step-word">#</span>
+            <input
+              type="number"
+              className="step-number"
+              value={step.count}
+              onChange={(e) => onChange({ ...step, count: Number(e.target.value) })}
+            />
+          </span>
+        )}
+
+        {(step.type === 'show' || step.type === 'hide') && (
+          <span className="step-fields">
+            <CountControl count={step.count} onChange={(count) => onChange({ ...step, count })} />
+            <span className="step-word">from</span>
+            <ZoneSelect value={step.zone} onChange={(zone) => onChange({ ...step, zone })} />
           </span>
         )}
 
@@ -247,6 +304,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
               variables={variables}
               createResource={createResource}
               createVariable={createVariable}
+              openPicker={openPicker}
             />
           </div>
 
@@ -265,6 +323,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
                 variables={variables}
                 createResource={createResource}
                 createVariable={createVariable}
+                openPicker={openPicker}
               />
             </div>
           ) : (
@@ -278,7 +337,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
   );
 }
 
-function StepList({ steps, onChange, resources, variables, createResource, createVariable }) {
+function StepList({ steps, onChange, resources, variables, createResource, createVariable, openPicker }) {
   const update = (i, next) => onChange(steps.map((s, idx) => (idx === i ? next : s)));
   const remove = (i) => onChange(steps.filter((_, idx) => idx !== i));
   return (
@@ -293,9 +352,10 @@ function StepList({ steps, onChange, resources, variables, createResource, creat
           variables={variables}
           createResource={createResource}
           createVariable={createVariable}
+          openPicker={openPicker}
         />
       ))}
-      <button className="add-pill" onClick={() => onChange([...steps, newStep('variable')])}>
+      <button className="add-pill" onClick={() => openPicker(onChange, steps)}>
         + Step
       </button>
     </div>
@@ -335,7 +395,17 @@ function TransitionRow({ transition, phases, currentPhaseId, variables, createVa
 
 export default function PhasesPage({ phases, setPhases, resources, setResources, variables, setVariables }) {
   const [selectedId, setSelectedId] = useState(phases[0]?.id ?? null);
+  const [picker, setPicker] = useState(null);
   const selected = phases.find((p) => p.id === selectedId) ?? null;
+
+  const openPicker = (onChange, steps) => {
+    setPicker({
+      onSelect: (type) => {
+        onChange([...steps, newStep(type)]);
+        setPicker(null);
+      },
+    });
+  };
 
   const createResource = (name) => {
     const r = newResource(name, 0);
@@ -437,6 +507,7 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                   variables={variables}
                   createResource={createResource}
                   createVariable={createVariable}
+                  openPicker={openPicker}
                 />
               </div>
 
@@ -465,6 +536,8 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
           )}
         </div>
       </div>
+
+      {picker && <StepPicker onSelect={picker.onSelect} onClose={() => setPicker(null)} />}
     </div>
   );
 }

@@ -17,17 +17,22 @@ export const OPERATORS = [
   { value: '<=', label: 'is less or equal to' },
 ];
 
-// The only three kinds of step a phase can contain. A resource change is a
-// built-in kind of Function, not its own step type.
+// Every kind of step a phase can contain. This is the exact list the
+// "Add Step" side panel offers — nothing more, nothing less.
 export const STEP_TYPES = [
-  { value: 'variable', label: 'Variable' },
-  { value: 'function', label: 'Function' },
   { value: 'condition', label: 'Condition' },
+  { value: 'variable', label: 'Variable' },
+  { value: 'add_resource', label: 'Add Resource' },
+  { value: 'deal', label: 'Deal' },
+  { value: 'shuffle', label: 'Shuffle' },
+  { value: 'discard', label: 'Discard' },
+  { value: 'show', label: 'Show' },
+  { value: 'hide', label: 'Hide' },
 ];
 
-export const FUNCTION_KINDS = [
-  { value: 'add_resource', label: 'Add Resource' },
-  { value: 'custom', label: 'Custom Function' },
+export const CARD_ZONES = [
+  { value: 'hand', label: 'Hand' },
+  { value: 'deck', label: 'Deck' },
 ];
 
 export function newResource(name = 'New Resource', value = 0) {
@@ -44,26 +49,38 @@ export function newConditionClause() {
   return { id: uid('clause'), variableId: '', op: '==', value: '' };
 }
 
-export function newStep(type = 'variable') {
+export function newStep(type) {
   const base = { id: uid('step'), type };
-  if (type === 'variable') {
-    return { ...base, variableId: '', op: 'set', amount: 0 };
+  switch (type) {
+    case 'variable':
+      return { ...base, variableId: '', op: 'set', amount: 0 };
+    case 'add_resource':
+      return { ...base, resourceId: '', amount: 0 };
+    case 'deal':
+      return { ...base, fromZone: 'deck', toZone: 'hand', count: 1 };
+    case 'shuffle':
+      return base; // only the deck can be shuffled right now — nothing to configure
+    case 'discard':
+      return base;
+    case 'show':
+    case 'hide':
+      return { ...base, count: 'all', zone: 'hand' };
+    case 'condition':
+    default:
+      // A container: picking it just gives you somewhere to nest more
+      // steps. Clauses combine with and/or, plus an optional else branch.
+      // Nothing stops a condition's own then/else lists from containing
+      // another condition, which is how you loop something inside itself
+      // indefinitely.
+      return {
+        ...base,
+        type: 'condition',
+        clauses: [newConditionClause()],
+        combine: 'and', // 'and' | 'or'
+        thenSteps: [],
+        elseSteps: null, // null = no else branch yet
+      };
   }
-  if (type === 'function') {
-    return { ...base, functionKind: 'add_resource', resourceId: '', amount: 0, functionName: '' };
-  }
-  // 'condition' — a container: tapping it just gives you a place to nest
-  // more steps. Supports combining clauses with and/or, plus an optional
-  // else branch. Nothing stops a condition's own then/else lists from
-  // containing another condition, which is how you loop something inside
-  // itself indefinitely.
-  return {
-    ...base,
-    clauses: [newConditionClause()],
-    combine: 'and', // 'and' | 'or'
-    thenSteps: [],
-    elseSteps: null, // null = no else branch yet
-  };
 }
 
 // A transition is "next phase: X on condition Y" — an empty condition
@@ -86,31 +103,40 @@ export function newPhase(name = 'New Phase') {
 
 const STORAGE_KEY = 'spadebox:state';
 
-// Converts one old-shape step (type: add_resource | change_variable |
-// call_function, optionally with an attached `condition`) into the new
-// variable/function/condition shape.
+// Converts one old-shape step into the current shape. Recurses into a
+// condition's then/else branches, since those can hold old-shape steps too.
 function migrateStep(s) {
-  let migrated;
+  if (s.type === 'condition') {
+    return {
+      ...s,
+      thenSteps: (s.thenSteps ?? []).map(migrateStep).filter(Boolean),
+      elseSteps: s.elseSteps ? s.elseSteps.map(migrateStep).filter(Boolean) : null,
+    };
+  }
   if (s.type === 'change_variable') {
-    migrated = { id: s.id, type: 'variable', variableId: s.variableId ?? '', op: s.op ?? 'set', amount: s.amount ?? 0 };
-  } else if (s.type === 'add_resource') {
-    migrated = { id: s.id, type: 'function', functionKind: 'add_resource', resourceId: s.resourceId ?? '', amount: s.amount ?? 0, functionName: '' };
-  } else if (s.type === 'call_function') {
-    migrated = { id: s.id, type: 'function', functionKind: 'custom', functionName: s.functionName ?? '', resourceId: '', amount: 0 };
-  } else {
-    return s; // already new-shape
+    return { id: s.id, type: 'variable', variableId: s.variableId ?? '', op: s.op ?? 'set', amount: s.amount ?? 0 };
+  }
+  if (s.type === 'function') {
+    // "Function" no longer exists as a step type — Add Resource was its
+    // only real use; a custom-named function has no equivalent now.
+    if (s.functionKind === 'add_resource') {
+      return { id: s.id, type: 'add_resource', resourceId: s.resourceId ?? '', amount: s.amount ?? 0 };
+    }
+    return null;
   }
   if (s.condition) {
+    // Oldest shape: a flat step with an attached `condition` — wrap it.
+    const { condition, ...flat } = s;
     return {
       id: uid('step'),
       type: 'condition',
-      clauses: [{ id: uid('clause'), ...s.condition }],
+      clauses: [{ id: uid('clause'), ...condition }],
       combine: 'and',
-      thenSteps: [migrated],
+      thenSteps: [migrateStep(flat)],
       elseSteps: null,
     };
   }
-  return migrated;
+  return s; // already current-shape
 }
 
 // Upgrades state saved by older versions of the app.
@@ -118,7 +144,7 @@ function normalize(state) {
   const migrateTransition = (t) => ({ ...t, condition: t.condition ?? newConditionClause() });
 
   const migratePhase = (p) => {
-    if (p.transitions) return { ...p, steps: (p.steps ?? []).map(migrateStep), transitions: p.transitions.map(migrateTransition) };
+    if (p.transitions) return { ...p, steps: (p.steps ?? []).map(migrateStep).filter(Boolean), transitions: p.transitions.map(migrateTransition) };
     const legacyLoop = p.loop;
     const transitions = legacyLoop?.targetPhaseId
       ? [
@@ -132,7 +158,7 @@ function normalize(state) {
         ]
       : [];
     const { loop, ...rest } = p;
-    return { ...rest, steps: (p.steps ?? []).map(migrateStep), transitions };
+    return { ...rest, steps: (p.steps ?? []).map(migrateStep).filter(Boolean), transitions };
   };
 
   return {
