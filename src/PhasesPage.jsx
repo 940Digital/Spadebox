@@ -87,7 +87,8 @@ function ClauseFields({ clause, onChange, variables, createVariable }) {
   );
 }
 
-function clauseSummary(clause, variables) {
+function clauseSummary(clause, variables, emptyLabel = 'not set') {
+  if (!clause.variableId) return emptyLabel;
   const v = variables.find((x) => x.id === clause.variableId);
   return `${v?.name ?? 'variable'} ${OPERATORS.find((o) => o.value === clause.op)?.label ?? clause.op} ${clause.value}`;
 }
@@ -187,7 +188,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
           </span>
         )}
 
-        <button className="btn btn-sm btn-danger" onClick={onRemove}>
+        <button className="icon-btn danger" title="Remove step" onClick={onRemove}>
           ✕
         </button>
       </div>
@@ -197,7 +198,9 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
           <div className="clause-list">
             {step.clauses.map((clause, i) => (
               <div className="clause-row" key={clause.id}>
-                {i > 0 && (
+                {i === 0 ? (
+                  <span className="step-word">If</span>
+                ) : (
                   <select
                     className="combine-select"
                     value={step.combine}
@@ -207,7 +210,6 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
                     <option value="or">OR</option>
                   </select>
                 )}
-                {i === 0 && <span className="step-word">If</span>}
                 <ClauseFields
                   clause={clause}
                   onChange={(next) => onChange({ ...step, clauses: step.clauses.map((c) => (c.id === clause.id ? next : c)) })}
@@ -216,20 +218,24 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
                 />
                 {step.clauses.length > 1 && (
                   <button
-                    className="btn btn-sm btn-danger"
+                    className="icon-btn danger"
+                    title="Remove condition"
                     onClick={() => onChange({ ...step, clauses: step.clauses.filter((c) => c.id !== clause.id) })}
                   >
                     ✕
                   </button>
                 )}
+                {i === step.clauses.length - 1 && (
+                  <button
+                    className="icon-btn"
+                    title="Add another condition (AND/OR)"
+                    onClick={() => onChange({ ...step, clauses: [...step.clauses, newConditionClause()] })}
+                  >
+                    +
+                  </button>
+                )}
               </div>
             ))}
-            <button
-              className="btn btn-sm"
-              onClick={() => onChange({ ...step, clauses: [...step.clauses, newConditionClause()] })}
-            >
-              + Add condition
-            </button>
           </div>
 
           <div className="branch">
@@ -248,8 +254,8 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
             <div className="branch">
               <div className="branch-label">
                 Else
-                <button className="btn btn-sm" onClick={() => onChange({ ...step, elseSteps: null })}>
-                  remove else
+                <button className="icon-btn danger" title="Remove else branch" onClick={() => onChange({ ...step, elseSteps: null })}>
+                  ✕
                 </button>
               </div>
               <StepList
@@ -262,8 +268,8 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
               />
             </div>
           ) : (
-            <button className="btn btn-sm" onClick={() => onChange({ ...step, elseSteps: [] })}>
-              + Add Else
+            <button className="add-pill" onClick={() => onChange({ ...step, elseSteps: [] })}>
+              + Else
             </button>
           )}
         </div>
@@ -289,8 +295,8 @@ function StepList({ steps, onChange, resources, variables, createResource, creat
           createVariable={createVariable}
         />
       ))}
-      <button className="btn btn-sm" onClick={() => onChange([...steps, newStep('variable')])}>
-        + Add Step
+      <button className="add-pill" onClick={() => onChange([...steps, newStep('variable')])}>
+        + Step
       </button>
     </div>
   );
@@ -299,7 +305,7 @@ function StepList({ steps, onChange, resources, variables, createResource, creat
 function TransitionRow({ transition, phases, currentPhaseId, variables, createVariable, onChange, onRemove }) {
   return (
     <div className="transition-row">
-      <span className="step-word">Next phase:</span>
+      <span className="step-word">Next:</span>
       <select value={transition.targetPhaseId} onChange={(e) => onChange({ ...transition, targetPhaseId: e.target.value })}>
         <option value="" disabled>
           choose a phase…
@@ -311,30 +317,16 @@ function TransitionRow({ transition, phases, currentPhaseId, variables, createVa
           </option>
         ))}
       </select>
+      <span className="step-word">if</span>
+      <ClauseFields
+        clause={transition.condition}
+        onChange={(condition) => onChange({ ...transition, condition })}
+        variables={variables}
+        createVariable={createVariable}
+      />
+      <span className="step-word step-word-muted">{transition.condition.variableId ? '' : '(leave blank for always)'}</span>
 
-      {transition.condition ? (
-        <>
-          <span className="step-word">on</span>
-          <ClauseFields
-            clause={transition.condition}
-            onChange={(condition) => onChange({ ...transition, condition })}
-            variables={variables}
-            createVariable={createVariable}
-          />
-          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: null })}>
-            remove condition
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="step-word step-word-muted">(always)</span>
-          <button className="btn btn-sm" onClick={() => onChange({ ...transition, condition: newConditionClause() })}>
-            + on condition…
-          </button>
-        </>
-      )}
-
-      <button className="btn btn-sm btn-danger" onClick={onRemove}>
+      <button className="icon-btn danger" title="Remove transition" onClick={onRemove}>
         ✕
       </button>
     </div>
@@ -405,15 +397,15 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                 {phase.transitions.map((t) => (
                   <div className="phase-transition-badge" key={t.id}>
                     → {phases.find((p) => p.id === t.targetPhaseId)?.name ?? '…'}
-                    {t.condition ? ` on ${clauseSummary(t.condition, variables)}` : ' (always)'}
+                    {t.condition.variableId ? ` on ${clauseSummary(t.condition, variables)}` : ' (always)'}
                   </div>
                 ))}
               </button>
             </div>
           ))}
           <div className="flow-connector" />
-          <button className="btn add-phase-btn" onClick={addPhase}>
-            + Add Phase
+          <button className="add-pill add-phase-btn" onClick={addPhase}>
+            + Phase
           </button>
         </div>
 
@@ -429,8 +421,8 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                   onChange={(e) => updatePhase(selected.id, { name: e.target.value })}
                 />
                 {phases.length > 1 && (
-                  <button className="btn btn-sm btn-danger" onClick={() => removePhase(selected.id)}>
-                    Delete Phase
+                  <button className="icon-btn danger" title="Delete phase" onClick={() => removePhase(selected.id)}>
+                    🗑
                   </button>
                 )}
               </div>
@@ -465,8 +457,8 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                     onRemove={() => removeTransition(t.id)}
                   />
                 ))}
-                <button className="btn btn-sm" onClick={addTransition}>
-                  + Add Transition
+                <button className="add-pill" onClick={addTransition}>
+                  + Transition
                 </button>
               </div>
             </>

@@ -27,7 +27,7 @@ export default function ResourcesPage({ resources, setResources }) {
                 value={r.value}
                 onChange={(e) => updateResource(r.id, { value: Number(e.target.value) })}
               />
-              <button className="btn btn-sm btn-danger" onClick={() => removeResource(r.id)}>
+              <button className="icon-btn danger" title="Remove resource" onClick={() => removeResource(r.id)}>
                 ✕
               </button>
             </div>

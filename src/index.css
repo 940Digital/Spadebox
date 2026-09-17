@@ -152,6 +152,49 @@ select {
   border-color: #d1435b;
 }
 
+/* Small square icon-only button — used for every "add one more" and
+   "remove this" action so those don't read as loud, competing buttons. */
+.icon-btn {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-bg);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+}
+.icon-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.icon-btn.danger:hover {
+  border-color: #d1435b;
+  color: #d1435b;
+}
+
+/* Compact dashed "add" affordance for growing a list (steps, phases,
+   transitions, else branch) — quieter than a solid bordered button. */
+.add-pill {
+  align-self: flex-start;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.add-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  border-style: solid;
+}
+
 /* --- resources page --- */
 .resource-list {
   display: flex;

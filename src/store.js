@@ -66,13 +66,13 @@ export function newStep(type = 'variable') {
   };
 }
 
-// A transition is "next phase: X on condition Y" — condition null means it
-// always fires (an unconditional default). A phase can have several,
-// evaluated in order; the first whose condition is met (or has none) wins.
-// Pointing a transition at an earlier phase (or itself) is how looping
-// works — a phase can loop forever inside itself this way.
+// A transition is "next phase: X on condition Y" — an empty condition
+// (no variable picked) just means it always fires. A phase can have
+// several, evaluated in order; the first whose condition is met (or is
+// empty) wins. Pointing a transition at an earlier phase (or itself) is
+// how looping works — a phase can loop forever inside itself this way.
 export function newTransition(targetPhaseId = '') {
-  return { id: uid('transition'), targetPhaseId, condition: null };
+  return { id: uid('transition'), targetPhaseId, condition: newConditionClause() };
 }
 
 export function newPhase(name = 'New Phase') {
@@ -115,8 +115,10 @@ function migrateStep(s) {
 
 // Upgrades state saved by older versions of the app.
 function normalize(state) {
+  const migrateTransition = (t) => ({ ...t, condition: t.condition ?? newConditionClause() });
+
   const migratePhase = (p) => {
-    if (p.transitions) return { ...p, steps: (p.steps ?? []).map(migrateStep) };
+    if (p.transitions) return { ...p, steps: (p.steps ?? []).map(migrateStep), transitions: p.transitions.map(migrateTransition) };
     const legacyLoop = p.loop;
     const transitions = legacyLoop?.targetPhaseId
       ? [
@@ -125,7 +127,7 @@ function normalize(state) {
             targetPhaseId: legacyLoop.targetPhaseId,
             condition: legacyLoop.breakVariableId
               ? { variableId: legacyLoop.breakVariableId, op: legacyLoop.breakOp, value: legacyLoop.breakValue }
-              : null,
+              : newConditionClause(),
           },
         ]
       : [];
