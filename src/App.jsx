@@ -59,6 +59,7 @@ export default function App() {
             setDiscards={setDiscards}
             hands={hands}
             setHands={setHands}
+            cardAttributes={cardAttributes}
           />
         )}
         {active === 'cards' && (

@@ -1,5 +1,10 @@
 import { useRef } from 'react';
 
+// Matches the canvas's dot-grid background spacing — dragging always lands
+// a box on a visible point instead of anywhere in between.
+const GRID = 24;
+const snap = (v) => Math.round(v / GRID) * GRID;
+
 function TableBox({ item, pos, onMove }) {
   const boxRef = useRef(null);
   const dragState = useRef(null);
@@ -14,8 +19,8 @@ function TableBox({ item, pos, onMove }) {
     };
     const onPointerMove = (ev) => {
       const { offsetX, offsetY, canvasRect: rect } = dragState.current;
-      const x = Math.max(0, Math.min(rect.width - 120, ev.clientX - rect.left - offsetX));
-      const y = Math.max(0, Math.min(rect.height - 70, ev.clientY - rect.top - offsetY));
+      const x = Math.max(0, Math.min(rect.width - 120, snap(ev.clientX - rect.left - offsetX)));
+      const y = Math.max(0, Math.min(rect.height - 70, snap(ev.clientY - rect.top - offsetY)));
       onMove(item.id, x, y);
     };
     const onPointerUp = () => {
@@ -47,7 +52,8 @@ export default function TablePage({ resources, decks, discards, hands, layout, s
     ...hands.map((h) => ({ id: h.id, kind: 'hand', name: h.name, sublabel: 'Hand' })),
   ];
 
-  const positionOf = (item, index) => layout[item.id] ?? { x: 20 + (index % 5) * 140, y: 20 + Math.floor(index / 5) * 100 };
+  const positionOf = (item, index) =>
+    layout[item.id] ?? { x: snap(24 + (index % 5) * 144), y: snap(24 + Math.floor(index / 5) * 96) };
 
   const onMove = (id, x, y) => setLayout((prev) => ({ ...prev, [id]: { x, y } }));
 

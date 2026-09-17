@@ -36,8 +36,18 @@ export const CARD_ZONES = [
   { value: 'deck', label: 'Deck' },
 ];
 
+// The exact set of kinds the "+ Add Resource" picker offers.
+export const RESOURCE_KINDS = [
+  { value: 'resource', label: 'Resource' },
+  { value: 'deck', label: 'Deck' },
+  { value: 'discard', label: 'Discard Pile' },
+  { value: 'hand', label: 'Hand' },
+];
+
+export const FUNCTION_ACTIONS = [{ value: 'reject', label: 'Reject' }];
+
 export function newResource(name = 'New Resource', value = 0) {
-  return { id: uid('resource'), name, value: Number(value) || 0 };
+  return { id: uid('resource'), name, value: Number(value) || 0, functions: [] };
 }
 
 export function newVariable(name = 'New Variable', value = 0) {
@@ -50,17 +60,35 @@ export function newPlayer(name = 'Player') {
 
 // Decks, discards and hands are the connectable pieces of the table: a
 // discard can feed back into a deck, a hand can discard into a discard
-// pile, and a hand can belong to a player.
+// pile, and a hand can belong to a player. Each can also carry functions —
+// small rules like "reject this move unless X matches Y".
 export function newDeck(name = 'New Deck') {
-  return { id: uid('deck'), name, reshuffleFromDiscardId: '' };
+  return { id: uid('deck'), name, reshuffleFromDiscardId: '', functions: [] };
 }
 
 export function newDiscard(name = 'New Discard') {
-  return { id: uid('discard'), name, connectsToDeckId: '' };
+  return { id: uid('discard'), name, connectsToDeckId: '', functions: [] };
 }
 
 export function newHand(name = 'New Hand') {
-  return { id: uid('hand'), name, playerId: '', discardId: '' };
+  return { id: uid('hand'), name, playerId: '', discardId: '', functions: [] };
+}
+
+// A field reference is "(attribute) of (card source)" — the card source is
+// either the active card (the one being played/checked) or the top card of
+// a named deck/discard/hand. sourceRef encodes the latter as "top:<id>".
+export function newFieldRef() {
+  return { attrId: '', source: 'active_card' };
+}
+
+export function newFunctionClause() {
+  return { id: uid('fnclause'), left: newFieldRef(), op: '==', right: newFieldRef() };
+}
+
+// A function is "if [not] <clauses> then <action>" — e.g. "if not this
+// card's Color equals the top card of Discard's Color, then reject".
+export function newResourceFunction() {
+  return { id: uid('fn'), negate: true, clauses: [newFunctionClause()], combine: 'and', action: 'reject' };
 }
 
 // An attribute is a shared property definition every card has a slot for —
@@ -202,14 +230,16 @@ function normalize(state) {
     return { ...rest, attributes: {} };
   };
 
+  const withFunctions = (entry) => ({ functions: [], ...entry });
+
   return {
-    resources: state.resources ?? [],
+    resources: (state.resources ?? []).map(withFunctions),
     variables: state.variables ?? [],
     phases: (state.phases ?? []).map(migratePhase),
     players: state.players ?? [],
-    decks: state.decks ?? [],
-    discards: state.discards ?? [],
-    hands: state.hands ?? [],
+    decks: (state.decks ?? []).map(withFunctions),
+    discards: (state.discards ?? []).map(withFunctions),
+    hands: (state.hands ?? []).map(withFunctions),
     cardAttributes: state.cardAttributes ?? [],
     cards: (state.cards ?? []).map(migrateCard),
     layout: state.layout ?? {},
