@@ -30,9 +30,42 @@ function CardPreview({ card, attributes, selectMode, selected, onToggleSelect, o
   );
 }
 
-function CardEditor({ card, attributes, onChange, onDuplicate, onDelete, onClose }) {
-  const setAttribute = (attrId, value) => onChange({ ...card, attributes: { ...card.attributes, [attrId]: value } });
+// Color, Description, and Attributes — the fields a single card and a
+// bulk edit have in common (everything but the name).
+function CardFieldset({ color, description, attributeValues, attributes, onColorChange, onDescriptionChange, onAttributeChange }) {
+  return (
+    <>
+      <label className="field-label">
+        Color
+        <input type="color" className="color-input" value={color} onChange={(e) => onColorChange(e.target.value)} />
+      </label>
+      <label className="field-label">
+        Description
+        <textarea
+          className="card-description"
+          placeholder="Description shown in the UI…"
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+        />
+      </label>
+      {attributes.length > 0 && (
+        <div className="field-label">
+          Attributes
+          <div className="card-attribute-fields">
+            {attributes.map((a) => (
+              <label key={a.id} className="card-attribute-field">
+                <span>{a.name}</span>
+                <input value={attributeValues[a.id] ?? ''} onChange={(e) => onAttributeChange(a.id, e.target.value)} />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
+function CardEditor({ card, attributes, onChange, onDuplicate, onDelete, onClose }) {
   return (
     <div className="side-panel-backdrop" onClick={onClose}>
       <div className="side-panel wide" onClick={(e) => e.stopPropagation()}>
@@ -47,34 +80,15 @@ function CardEditor({ card, attributes, onChange, onDuplicate, onDelete, onClose
             Name
             <input value={card.name} onChange={(e) => onChange({ ...card, name: e.target.value })} />
           </label>
-          <label className="field-label">
-            Color
-            <input type="color" className="color-input" value={card.color} onChange={(e) => onChange({ ...card, color: e.target.value })} />
-          </label>
-          <label className="field-label">
-            Description
-            <textarea
-              className="card-description"
-              placeholder="Description shown in the UI…"
-              value={card.description}
-              onChange={(e) => onChange({ ...card, description: e.target.value })}
-            />
-          </label>
-
-          {attributes.length > 0 && (
-            <div className="field-label">
-              Attributes
-              <div className="card-attribute-fields">
-                {attributes.map((a) => (
-                  <label key={a.id} className="card-attribute-field">
-                    <span>{a.name}</span>
-                    <input value={card.attributes[a.id] ?? ''} onChange={(e) => setAttribute(a.id, e.target.value)} />
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
+          <CardFieldset
+            color={card.color}
+            description={card.description}
+            attributeValues={card.attributes}
+            attributes={attributes}
+            onColorChange={(color) => onChange({ ...card, color })}
+            onDescriptionChange={(description) => onChange({ ...card, description })}
+            onAttributeChange={(attrId, value) => onChange({ ...card, attributes: { ...card.attributes, [attrId]: value } })}
+          />
           <button className="btn" onClick={onDuplicate}>
             Duplicate Card
           </button>
@@ -87,74 +101,77 @@ function CardEditor({ card, attributes, onChange, onDuplicate, onDelete, onClose
   );
 }
 
-// Bulk-editable fields are everything but the name — a shared name across
-// many cards wouldn't mean anything.
+// The same editor, just with no name field — a shared name across many
+// cards wouldn't mean anything. Only fields actually touched get applied,
+// so leaving Description blank doesn't wipe out what was already there.
 function BulkEditPanel({ attributes, count, onApply, onClose }) {
-  const [field, setField] = useState('');
-  const [value, setValue] = useState('');
+  const [color, setColor] = useState('#ffffff');
+  const [description, setDescription] = useState('');
+  const [attributeValues, setAttributeValues] = useState({});
+  const [touched, setTouched] = useState({ color: false, description: false, attrs: new Set() });
 
-  const isColor = field === 'color';
-  const isDescription = field === 'description';
+  const touch = (key) => setTouched((prev) => ({ ...prev, [key]: true }));
+  const touchAttr = (attrId) => setTouched((prev) => ({ ...prev, attrs: new Set(prev.attrs).add(attrId) }));
+
+  const apply = () => {
+    const patch = {};
+    if (touched.color) patch.color = color;
+    if (touched.description) patch.description = description;
+    if (touched.attrs.size > 0) patch.attributes = Object.fromEntries([...touched.attrs].map((id) => [id, attributeValues[id] ?? '']));
+    onApply(patch);
+    onClose();
+  };
+
+  const hasChanges = touched.color || touched.description || touched.attrs.size > 0;
 
   return (
     <div className="side-panel-backdrop" onClick={onClose}>
-      <div className="side-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="side-panel wide" onClick={(e) => e.stopPropagation()}>
         <div className="side-panel-head">
-          <span>Bulk Edit</span>
+          <span>
+            Bulk Edit {count} Card{count === 1 ? '' : 's'}
+          </span>
           <button className="icon-btn" title="Close" onClick={onClose}>
             ✕
           </button>
         </div>
         <div className="side-panel-body">
-          <label className="field-label">
-            Field
-            <select
-              value={field}
-              onChange={(e) => {
-                setField(e.target.value);
-                setValue(e.target.value === 'color' ? '#ffffff' : '');
-              }}
-            >
-              <option value="" disabled>
-                choose…
-              </option>
-              <option value="color">Card Color</option>
-              <option value="description">Description</option>
-              {attributes.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {field && (
-            <label className="field-label">
-              Set value to
-              {isColor ? (
-                <input type="color" className="color-input" value={value} onChange={(e) => setValue(e.target.value)} />
-              ) : isDescription ? (
-                <textarea className="card-description" value={value} onChange={(e) => setValue(e.target.value)} />
-              ) : (
-                <input value={value} onChange={(e) => setValue(e.target.value)} />
-              )}
-            </label>
-          )}
-
-          <button
-            className="btn btn-primary"
-            disabled={!field}
-            onClick={() => {
-              onApply(field, value);
-              onClose();
+          <div className="empty-hint">Only fields you change here get applied — the rest are left alone.</div>
+          <CardFieldset
+            color={color}
+            description={description}
+            attributeValues={attributeValues}
+            attributes={attributes}
+            onColorChange={(v) => {
+              setColor(v);
+              touch('color');
             }}
-          >
+            onDescriptionChange={(v) => {
+              setDescription(v);
+              touch('description');
+            }}
+            onAttributeChange={(attrId, v) => {
+              setAttributeValues((prev) => ({ ...prev, [attrId]: v }));
+              touchAttr(attrId);
+            }}
+          />
+          <button className="btn btn-primary" disabled={!hasChanges} onClick={apply}>
             Apply to {count} card{count === 1 ? '' : 's'}
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+// Duplicate names get an incrementing number at the end instead of
+// "Copy" — strip any trailing number first so repeated duplicates don't
+// pile up ("Card 1" -> "Card 2" -> "Card 3", not "Card 1 Copy Copy").
+function nextDuplicateName(name, existingNames) {
+  const base = name.replace(/\s+\d+$/, '');
+  let n = 1;
+  while (existingNames.includes(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
 }
 
 export default function CardsPage({ cardAttributes, setCardAttributes, cards, setCards }) {
@@ -185,7 +202,8 @@ export default function CardsPage({ cardAttributes, setCardAttributes, cards, se
   const duplicateCard = (id) => {
     const source = cards.find((c) => c.id === id);
     if (!source) return;
-    const copy = { ...source, id: uid('card'), name: `${source.name} Copy`, attributes: { ...source.attributes } };
+    const name = nextDuplicateName(source.name, cards.map((c) => c.name));
+    const copy = { ...source, id: uid('card'), name, attributes: { ...source.attributes } };
     const index = cards.findIndex((c) => c.id === id);
     setCards([...cards.slice(0, index + 1), copy, ...cards.slice(index + 1)]);
     setEditingId(copy.id);
@@ -202,17 +220,28 @@ export default function CardsPage({ cardAttributes, setCardAttributes, cards, se
     setSelectedIds([]);
   };
   const duplicateSelected = () => {
-    const copies = cards.filter((c) => selectedIds.includes(c.id)).map((c) => ({ ...c, id: uid('card'), name: `${c.name} Copy`, attributes: { ...c.attributes } }));
+    let names = cards.map((c) => c.name);
+    const copies = [];
+    cards
+      .filter((c) => selectedIds.includes(c.id))
+      .forEach((c) => {
+        const name = nextDuplicateName(c.name, names);
+        names = [...names, name];
+        copies.push({ ...c, id: uid('card'), name, attributes: { ...c.attributes } });
+      });
     setCards([...cards, ...copies]);
     setSelectedIds(copies.map((c) => c.id));
   };
-  const applyBulkEdit = (field, value) =>
+  const applyBulkEdit = (patch) =>
     setCards(
       cards.map((c) => {
         if (!selectedIds.includes(c.id)) return c;
-        if (field === 'color') return { ...c, color: value };
-        if (field === 'description') return { ...c, description: value };
-        return { ...c, attributes: { ...c.attributes, [field]: value } };
+        return {
+          ...c,
+          ...(patch.color !== undefined ? { color: patch.color } : null),
+          ...(patch.description !== undefined ? { description: patch.description } : null),
+          ...(patch.attributes ? { attributes: { ...c.attributes, ...patch.attributes } } : null),
+        };
       })
     );
 

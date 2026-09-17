@@ -143,6 +143,19 @@ select {
   opacity: 0.9;
   color: #fff;
 }
+.btn:disabled,
+.btn:disabled:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-dim);
+}
 .btn-sm {
   padding: 3px 8px;
   font-size: 12px;
