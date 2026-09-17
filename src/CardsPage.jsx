@@ -11,29 +11,69 @@ function Section({ title, children }) {
 }
 
 // A small, fixed-size preview — never grows with the number of classes a
-// card has. Click it to open the full editor; the checkbox is for bulk
-// selection and doesn't open anything.
-function CardPreview({ card, classes, selected, onToggleSelect, onOpen }) {
+// card has. Outside select mode, clicking it opens the full editor; in
+// select mode, clicking anywhere on it toggles selection instead.
+function CardPreview({ card, classes, selectMode, selected, onToggleSelect, onOpen }) {
   const classNames = card.classIds.map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean);
   return (
-    <div className="card-preview" style={{ borderTopColor: card.color }} onClick={onOpen}>
-      <input
-        type="checkbox"
-        className="card-preview-check"
-        checked={selected}
-        onClick={(e) => e.stopPropagation()}
-        onChange={onToggleSelect}
-      />
+    <div
+      className={`card-preview${selected ? ' selected' : ''}`}
+      style={{ borderTopColor: card.color }}
+      onClick={selectMode ? onToggleSelect : onOpen}
+    >
+      {selectMode && <input type="checkbox" className="card-preview-check" checked={selected} readOnly />}
       <div className="card-preview-name">{card.name}</div>
       {classNames.length > 0 && <div className="card-preview-classes">{classNames.join(', ')}</div>}
     </div>
   );
 }
 
-function CardEditor({ card, classes, onChange, onDelete, onClose }) {
+// Inline "type a name, hit enter" affordance for creating a class right
+// from a card's class picker, matching the +New pattern used elsewhere.
+function NewClassChip({ onCreate }) {
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  if (!creating) {
+    return (
+      <button className="class-chip new-class-chip" onClick={() => setCreating(true)}>
+        + New Class
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      className="entity-picker-input"
+      placeholder="class name"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft.trim()) onCreate(draft.trim());
+        setCreating(false);
+        setDraft('');
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') {
+          setCreating(false);
+          setDraft('');
+        }
+      }}
+    />
+  );
+}
+
+function CardEditor({ card, classes, onChange, onCreateClass, onDelete, onClose }) {
   const toggleClass = (classId) => {
     const has = card.classIds.includes(classId);
     onChange({ ...card, classIds: has ? card.classIds.filter((id) => id !== classId) : [...card.classIds, classId] });
+  };
+
+  const createAndAssignClass = (name) => {
+    const id = onCreateClass(name);
+    onChange({ ...card, classIds: [...card.classIds, id] });
   };
 
   return (
@@ -65,21 +105,18 @@ function CardEditor({ card, classes, onChange, onDelete, onClose }) {
           </label>
           <div className="field-label">
             Classes
-            {classes.length === 0 ? (
-              <div className="empty-hint">No classes yet — add one below first.</div>
-            ) : (
-              <div className="card-class-chips">
-                {classes.map((c) => (
-                  <button
-                    key={c.id}
-                    className={`class-chip${card.classIds.includes(c.id) ? ' active' : ''}`}
-                    onClick={() => toggleClass(c.id)}
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="card-class-chips">
+              {classes.map((c) => (
+                <button
+                  key={c.id}
+                  className={`class-chip${card.classIds.includes(c.id) ? ' active' : ''}`}
+                  onClick={() => toggleClass(c.id)}
+                >
+                  {c.name}
+                </button>
+              ))}
+              <NewClassChip onCreate={createAndAssignClass} />
+            </div>
           </div>
           <button className="btn btn-danger" onClick={onDelete}>
             Delete Card
@@ -92,9 +129,15 @@ function CardEditor({ card, classes, onChange, onDelete, onClose }) {
 
 export default function CardsPage({ cardClasses, setCardClasses, cards, setCards }) {
   const [editingId, setEditingId] = useState(null);
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
   const addClass = () => setCardClasses([...cardClasses, newCardClass(`Class ${cardClasses.length + 1}`)]);
+  const createClass = (name) => {
+    const c = newCardClass(name);
+    setCardClasses((prev) => [...prev, c]);
+    return c.id;
+  };
   const updateClass = (id, patch) => setCardClasses(cardClasses.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const removeClass = (id) => {
     setCardClasses(cardClasses.filter((c) => c.id !== id));
@@ -111,6 +154,10 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
 
   const toggleSelect = (id) => setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleSelectAll = () => setSelectedIds(selectedIds.length === cards.length ? [] : cards.map((c) => c.id));
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
   const deleteSelected = () => {
     setCards(cards.filter((c) => !selectedIds.includes(c.id)));
     setSelectedIds([]);
@@ -144,14 +191,21 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
       <Section title="Cards">
         {cards.length > 0 && (
           <div className="bulk-bar">
-            <label className="bulk-select-all">
-              <input type="checkbox" checked={selectedIds.length === cards.length} onChange={toggleSelectAll} />
-              Select all
-            </label>
-            {selectedIds.length > 0 && (
-              <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
-                Delete Selected ({selectedIds.length})
-              </button>
+            <button className="btn btn-sm" onClick={selectMode ? exitSelectMode : () => setSelectMode(true)}>
+              {selectMode ? 'Done' : 'Select'}
+            </button>
+            {selectMode && (
+              <>
+                <label className="bulk-select-all">
+                  <input type="checkbox" checked={selectedIds.length === cards.length} onChange={toggleSelectAll} />
+                  Select all
+                </label>
+                {selectedIds.length > 0 && (
+                  <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
+                    Delete Selected ({selectedIds.length})
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -162,6 +216,7 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
               key={card.id}
               card={card}
               classes={cardClasses}
+              selectMode={selectMode}
               selected={selectedIds.includes(card.id)}
               onToggleSelect={() => toggleSelect(card.id)}
               onOpen={() => setEditingId(card.id)}
@@ -178,6 +233,7 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
           card={editingCard}
           classes={cardClasses}
           onChange={updateCard}
+          onCreateClass={createClass}
           onDelete={() => removeCard(editingCard.id)}
           onClose={() => setEditingId(null)}
         />

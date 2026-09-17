@@ -573,6 +573,10 @@ select {
 .card-preview:hover {
   border-color: var(--accent);
 }
+.card-preview.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
 .card-preview-check {
   position: absolute;
   top: 6px;
@@ -631,6 +635,14 @@ select {
   color: #fff;
   border-color: var(--accent);
   background: var(--accent);
+}
+.new-class-chip {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+.new-class-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* --- table page --- */
