@@ -18,11 +18,12 @@ export const OPERATORS = [
 ];
 
 // Every kind of step a phase can contain. This is the exact list the
-// "Add Step" side panel offers — nothing more, nothing less.
+// "Add Step" side panel offers — nothing more, nothing less. Resources are
+// no longer touched from a phase — they're set up entirely in the
+// Resources tab now.
 export const STEP_TYPES = [
   { value: 'condition', label: 'Condition' },
   { value: 'variable', label: 'Variable' },
-  { value: 'add_resource', label: 'Add Resource' },
   { value: 'deal', label: 'Deal' },
   { value: 'shuffle', label: 'Shuffle' },
   { value: 'discard', label: 'Discard' },
@@ -43,6 +44,33 @@ export function newVariable(name = 'New Variable', value = 0) {
   return { id: uid('variable'), name, value: Number(value) || 0 };
 }
 
+export function newPlayer(name = 'Player') {
+  return { id: uid('player'), name };
+}
+
+// Decks, discards and hands are the connectable pieces of the table: a
+// discard can feed back into a deck, a hand can discard into a discard
+// pile, and a hand can belong to a player.
+export function newDeck(name = 'New Deck') {
+  return { id: uid('deck'), name, reshuffleFromDiscardId: '' };
+}
+
+export function newDiscard(name = 'New Discard') {
+  return { id: uid('discard'), name, connectsToDeckId: '' };
+}
+
+export function newHand(name = 'New Hand') {
+  return { id: uid('hand'), name, playerId: '', discardId: '' };
+}
+
+export function newCardClass(name = 'New Class') {
+  return { id: uid('class'), name, color: '#6b3bff' };
+}
+
+export function newCard(name = 'New Card') {
+  return { id: uid('card'), name, classIds: [], description: '', color: '#ffffff' };
+}
+
 // A condition clause is always variable-based: no other kind can gate a
 // step or a transition yet.
 export function newConditionClause() {
@@ -54,8 +82,6 @@ export function newStep(type) {
   switch (type) {
     case 'variable':
       return { ...base, variableId: '', op: 'set', amount: 0 };
-    case 'add_resource':
-      return { ...base, resourceId: '', amount: 0 };
     case 'deal':
       return { ...base, fromZone: 'deck', toZone: 'hand', count: 1 };
     case 'shuffle':
@@ -105,6 +131,8 @@ const STORAGE_KEY = 'spadebox:state';
 
 // Converts one old-shape step into the current shape. Recurses into a
 // condition's then/else branches, since those can hold old-shape steps too.
+// "Add Resource" steps have no replacement — resources are configured in
+// the Resources tab now, so those steps are simply dropped.
 function migrateStep(s) {
   if (s.type === 'condition') {
     return {
@@ -116,23 +144,22 @@ function migrateStep(s) {
   if (s.type === 'change_variable') {
     return { id: s.id, type: 'variable', variableId: s.variableId ?? '', op: s.op ?? 'set', amount: s.amount ?? 0 };
   }
+  if (s.type === 'add_resource') return null;
   if (s.type === 'function') {
-    // "Function" no longer exists as a step type — Add Resource was its
-    // only real use; a custom-named function has no equivalent now.
-    if (s.functionKind === 'add_resource') {
-      return { id: s.id, type: 'add_resource', resourceId: s.resourceId ?? '', amount: s.amount ?? 0 };
-    }
+    if (s.functionKind === 'add_resource') return null;
     return null;
   }
   if (s.condition) {
     // Oldest shape: a flat step with an attached `condition` — wrap it.
     const { condition, ...flat } = s;
+    const migratedFlat = migrateStep(flat);
+    if (!migratedFlat) return null;
     return {
       id: uid('step'),
       type: 'condition',
       clauses: [{ id: uid('clause'), ...condition }],
       combine: 'and',
-      thenSteps: [migrateStep(flat)],
+      thenSteps: [migratedFlat],
       elseSteps: null,
     };
   }
@@ -165,6 +192,13 @@ function normalize(state) {
     resources: state.resources ?? [],
     variables: state.variables ?? [],
     phases: (state.phases ?? []).map(migratePhase),
+    players: state.players ?? [],
+    decks: state.decks ?? [],
+    discards: state.discards ?? [],
+    hands: state.hands ?? [],
+    cardClasses: state.cardClasses ?? [],
+    cards: state.cards ?? [],
+    layout: state.layout ?? {},
   };
 }
 
@@ -179,6 +213,13 @@ export function loadInitialState() {
     resources: [],
     variables: [],
     phases: [newPhase('Set Up')],
+    players: [],
+    decks: [],
+    discards: [],
+    hands: [],
+    cardClasses: [],
+    cards: [],
+    layout: {},
   };
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CARD_ZONES, newConditionClause, newPhase, newResource, newStep, newTransition, newVariable, OPERATORS, STEP_TYPES } from './store';
+import { CARD_ZONES, newConditionClause, newPhase, newStep, newTransition, newVariable, OPERATORS, STEP_TYPES } from './store';
 
 function EntityPicker({ entities, value, onChange, onCreate, placeholder }) {
   const [creating, setCreating] = useState(false);
@@ -118,15 +118,11 @@ function clauseSummary(clause, variables, emptyLabel = 'not set') {
 const ZONE_LABEL = (value) => CARD_ZONES.find((z) => z.value === value)?.label ?? value;
 const STEP_LABEL = (type) => STEP_TYPES.find((t) => t.value === type)?.label ?? type;
 
-function stepSummary(step, resources, variables) {
+function stepSummary(step, variables) {
   switch (step.type) {
     case 'variable': {
       const v = variables.find((x) => x.id === step.variableId);
       return `${v?.name ?? 'variable'} ${step.op === 'set' ? '=' : '+='} ${step.amount}`;
-    }
-    case 'add_resource': {
-      const r = resources.find((x) => x.id === step.resourceId);
-      return `+${step.amount} ${r?.name ?? 'resource'}`;
     }
     case 'deal':
       return `Deal ${step.count} from ${ZONE_LABEL(step.fromZone)} to ${ZONE_LABEL(step.toZone)}`;
@@ -174,7 +170,7 @@ function StepPicker({ onSelect, onClose }) {
   );
 }
 
-function StepNode({ step, onChange, onRemove, resources, variables, createResource, createVariable, openPicker }) {
+function StepNode({ step, onChange, onRemove, variables, createVariable, openPicker }) {
   return (
     <div className={`step-node${step.type === 'condition' ? ' step-node-condition' : ''}`}>
       <div className="step-head-row">
@@ -193,25 +189,6 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
               <option value="set">set to</option>
               <option value="add">add</option>
             </select>
-            <input
-              type="number"
-              className="step-number"
-              value={step.amount}
-              onChange={(e) => onChange({ ...step, amount: Number(e.target.value) })}
-            />
-          </span>
-        )}
-
-        {step.type === 'add_resource' && (
-          <span className="step-fields">
-            <EntityPicker
-              entities={resources}
-              value={step.resourceId}
-              onChange={(resourceId) => onChange({ ...step, resourceId })}
-              onCreate={(name) => createResource(name)}
-              placeholder="resource name"
-            />
-            <span className="step-word">by</span>
             <input
               type="number"
               className="step-number"
@@ -300,9 +277,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
             <StepList
               steps={step.thenSteps}
               onChange={(thenSteps) => onChange({ ...step, thenSteps })}
-              resources={resources}
               variables={variables}
-              createResource={createResource}
               createVariable={createVariable}
               openPicker={openPicker}
             />
@@ -319,9 +294,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
               <StepList
                 steps={step.elseSteps}
                 onChange={(elseSteps) => onChange({ ...step, elseSteps })}
-                resources={resources}
                 variables={variables}
-                createResource={createResource}
                 createVariable={createVariable}
                 openPicker={openPicker}
               />
@@ -337,7 +310,7 @@ function StepNode({ step, onChange, onRemove, resources, variables, createResour
   );
 }
 
-function StepList({ steps, onChange, resources, variables, createResource, createVariable, openPicker }) {
+function StepList({ steps, onChange, variables, createVariable, openPicker }) {
   const update = (i, next) => onChange(steps.map((s, idx) => (idx === i ? next : s)));
   const remove = (i) => onChange(steps.filter((_, idx) => idx !== i));
   return (
@@ -348,9 +321,7 @@ function StepList({ steps, onChange, resources, variables, createResource, creat
           step={step}
           onChange={(next) => update(i, next)}
           onRemove={() => remove(i)}
-          resources={resources}
           variables={variables}
-          createResource={createResource}
           createVariable={createVariable}
           openPicker={openPicker}
         />
@@ -393,7 +364,7 @@ function TransitionRow({ transition, phases, currentPhaseId, variables, createVa
   );
 }
 
-export default function PhasesPage({ phases, setPhases, resources, setResources, variables, setVariables }) {
+export default function PhasesPage({ phases, setPhases, variables, setVariables }) {
   const [selectedId, setSelectedId] = useState(phases[0]?.id ?? null);
   const [picker, setPicker] = useState(null);
   const selected = phases.find((p) => p.id === selectedId) ?? null;
@@ -407,11 +378,6 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
     });
   };
 
-  const createResource = (name) => {
-    const r = newResource(name, 0);
-    setResources((prev) => [...prev, r]);
-    return r.id;
-  };
   const createVariable = (name) => {
     const v = newVariable(name, 0);
     setVariables((prev) => [...prev, v]);
@@ -459,7 +425,7 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                   <div className="phase-node-chips">
                     {phase.steps.map((s) => (
                       <span className="phase-chip" key={s.id}>
-                        {stepSummary(s, resources, variables)}
+                        {stepSummary(s, variables)}
                       </span>
                     ))}
                   </div>
@@ -503,9 +469,7 @@ export default function PhasesPage({ phases, setPhases, resources, setResources,
                 <StepList
                   steps={selected.steps}
                   onChange={(steps) => updatePhase(selected.id, { steps })}
-                  resources={resources}
                   variables={variables}
-                  createResource={createResource}
                   createVariable={createVariable}
                   openPicker={openPicker}
                 />

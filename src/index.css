@@ -218,6 +218,40 @@ select {
   width: 90px;
 }
 
+.editor-section {
+  margin-bottom: 28px;
+}
+.editor-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.connect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.player-count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.color-input {
+  width: 32px;
+  height: 28px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
 /* --- phases page --- */
 .phases-layout {
   display: flex;
@@ -491,4 +525,109 @@ select {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
+}
+
+/* --- cards page --- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.card-editor {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-description {
+  width: 100%;
+  resize: vertical;
+  min-height: 50px;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+}
+.card-class-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.class-chip {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.class-chip.active {
+  color: #fff;
+  border-color: transparent;
+}
+
+/* --- table page --- */
+.table-page {
+  max-width: none;
+}
+.table-canvas {
+  position: relative;
+  width: 100%;
+  height: 640px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  overflow: hidden;
+}
+.table-box {
+  position: absolute;
+  width: 120px;
+  min-height: 60px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 2px 6px rgba(20, 20, 26, 0.08);
+}
+.table-box:active {
+  cursor: grabbing;
+}
+.table-box-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-h);
+}
+.table-box-sublabel {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.table-box-resource {
+  border-left: 4px solid #38b06b;
+}
+.table-box-deck {
+  border-left: 4px solid var(--accent);
+}
+.table-box-discard {
+  border-left: 4px solid #d1435b;
+}
+.table-box-hand {
+  border-left: 4px solid #e6a53a;
 }
