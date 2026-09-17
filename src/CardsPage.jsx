@@ -87,53 +87,70 @@ function CardEditor({ card, attributes, onChange, onDuplicate, onDelete, onClose
   );
 }
 
+// Bulk-editable fields are everything but the name — a shared name across
+// many cards wouldn't mean anything.
 function BulkEditPanel({ attributes, count, onApply, onClose }) {
-  const [attrId, setAttrId] = useState('');
+  const [field, setField] = useState('');
   const [value, setValue] = useState('');
+
+  const isColor = field === 'color';
+  const isDescription = field === 'description';
 
   return (
     <div className="side-panel-backdrop" onClick={onClose}>
       <div className="side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="side-panel-head">
-          <span>Bulk Edit Attribute</span>
+          <span>Bulk Edit</span>
           <button className="icon-btn" title="Close" onClick={onClose}>
             ✕
           </button>
         </div>
         <div className="side-panel-body">
-          {attributes.length === 0 ? (
-            <div className="empty-hint">No attributes yet — add one above first.</div>
-          ) : (
-            <>
-              <label className="field-label">
-                Attribute
-                <select value={attrId} onChange={(e) => setAttrId(e.target.value)}>
-                  <option value="" disabled>
-                    choose…
-                  </option>
-                  {attributes.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field-label">
-                Set value to
+          <label className="field-label">
+            Field
+            <select
+              value={field}
+              onChange={(e) => {
+                setField(e.target.value);
+                setValue(e.target.value === 'color' ? '#ffffff' : '');
+              }}
+            >
+              <option value="" disabled>
+                choose…
+              </option>
+              <option value="color">Card Color</option>
+              <option value="description">Description</option>
+              {attributes.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {field && (
+            <label className="field-label">
+              Set value to
+              {isColor ? (
+                <input type="color" className="color-input" value={value} onChange={(e) => setValue(e.target.value)} />
+              ) : isDescription ? (
+                <textarea className="card-description" value={value} onChange={(e) => setValue(e.target.value)} />
+              ) : (
                 <input value={value} onChange={(e) => setValue(e.target.value)} />
-              </label>
-              <button
-                className="btn btn-primary"
-                disabled={!attrId}
-                onClick={() => {
-                  onApply(attrId, value);
-                  onClose();
-                }}
-              >
-                Apply to {count} card{count === 1 ? '' : 's'}
-              </button>
-            </>
+              )}
+            </label>
           )}
+
+          <button
+            className="btn btn-primary"
+            disabled={!field}
+            onClick={() => {
+              onApply(field, value);
+              onClose();
+            }}
+          >
+            Apply to {count} card{count === 1 ? '' : 's'}
+          </button>
         </div>
       </div>
     </div>
@@ -189,8 +206,15 @@ export default function CardsPage({ cardAttributes, setCardAttributes, cards, se
     setCards([...cards, ...copies]);
     setSelectedIds(copies.map((c) => c.id));
   };
-  const applyBulkAttribute = (attrId, value) =>
-    setCards(cards.map((c) => (selectedIds.includes(c.id) ? { ...c, attributes: { ...c.attributes, [attrId]: value } } : c)));
+  const applyBulkEdit = (field, value) =>
+    setCards(
+      cards.map((c) => {
+        if (!selectedIds.includes(c.id)) return c;
+        if (field === 'color') return { ...c, color: value };
+        if (field === 'description') return { ...c, description: value };
+        return { ...c, attributes: { ...c.attributes, [field]: value } };
+      })
+    );
 
   const editingCard = cards.find((c) => c.id === editingId) ?? null;
 
@@ -237,7 +261,7 @@ export default function CardsPage({ cardAttributes, setCardAttributes, cards, se
                       Duplicate ({selectedIds.length})
                     </button>
                     <button className="btn btn-sm" onClick={() => setBulkEditing(true)}>
-                      Edit Attribute ({selectedIds.length})
+                      Bulk Edit ({selectedIds.length})
                     </button>
                     <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
                       Delete Selected ({selectedIds.length})
@@ -279,12 +303,7 @@ export default function CardsPage({ cardAttributes, setCardAttributes, cards, se
       )}
 
       {bulkEditing && (
-        <BulkEditPanel
-          attributes={cardAttributes}
-          count={selectedIds.length}
-          onApply={applyBulkAttribute}
-          onClose={() => setBulkEditing(false)}
-        />
+        <BulkEditPanel attributes={cardAttributes} count={selectedIds.length} onApply={applyBulkEdit} onClose={() => setBulkEditing(false)} />
       )}
     </div>
   );
