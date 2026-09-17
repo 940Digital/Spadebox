@@ -63,8 +63,11 @@ export function newHand(name = 'New Hand') {
   return { id: uid('hand'), name, playerId: '', discardId: '' };
 }
 
+// A class is just a name — a list of cards that belong to it. No color of
+// its own; grouping "7 of Spades" and "9 of Spades" into a "Spade" class
+// doesn't need one.
 export function newCardClass(name = 'New Class') {
-  return { id: uid('class'), name, color: '#6b3bff' };
+  return { id: uid('class'), name };
 }
 
 export function newCard(name = 'New Card') {

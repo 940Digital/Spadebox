@@ -150,9 +150,9 @@ function stepSummary(step, variables) {
 // button. Picking one adds it exactly where that button lives.
 function StepPicker({ onSelect, onClose }) {
   return (
-    <div className="step-picker-backdrop" onClick={onClose}>
-      <div className="step-picker-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="step-picker-head">
+    <div className="side-panel-backdrop" onClick={onClose}>
+      <div className="side-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="side-panel-head">
           <span>Add Step</span>
           <button className="icon-btn" title="Close" onClick={onClose}>
             ✕

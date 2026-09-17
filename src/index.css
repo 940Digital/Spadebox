@@ -466,8 +466,8 @@ select {
   text-align: left;
 }
 
-/* --- add-step side panel --- */
-.step-picker-backdrop {
+/* --- generic right-side sliding panel (add-step picker, card editor) --- */
+.side-panel-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(20, 20, 26, 0.15);
@@ -475,7 +475,7 @@ select {
   display: flex;
   justify-content: flex-end;
 }
-.step-picker-panel {
+.side-panel {
   width: 260px;
   height: 100%;
   background: var(--panel-bg);
@@ -484,6 +484,9 @@ select {
   display: flex;
   flex-direction: column;
   animation: slide-in 0.15s ease-out;
+}
+.side-panel.wide {
+  width: 380px;
 }
 @keyframes slide-in {
   from {
@@ -495,7 +498,7 @@ select {
     opacity: 1;
   }
 }
-.step-picker-head {
+.side-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -503,6 +506,13 @@ select {
   border-bottom: 1px solid var(--border);
   font-weight: 700;
   color: var(--text-h);
+}
+.side-panel-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .step-picker-list {
   padding: 10px;
@@ -528,33 +538,76 @@ select {
 }
 
 /* --- cards page --- */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+.bulk-bar {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  margin-bottom: 8px;
+}
+.bulk-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.card-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
   margin-bottom: 10px;
 }
-.card-editor {
+.card-preview {
+  position: relative;
   background: var(--panel-bg);
   border: 1px solid var(--border);
   border-top: 4px solid var(--border);
   border-radius: 8px;
-  padding: 10px;
+  padding: 10px 8px 8px;
+  height: 90px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  cursor: pointer;
+  overflow: hidden;
 }
-.card-editor-row {
+.card-preview:hover {
+  border-color: var(--accent);
+}
+.card-preview-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.card-preview-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-h);
+  padding-right: 18px;
+}
+.card-preview-classes {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-label {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
 }
 .card-description {
   width: 100%;
   resize: vertical;
-  min-height: 50px;
+  min-height: 70px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 400;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -576,7 +629,8 @@ select {
 }
 .class-chip.active {
   color: #fff;
-  border-color: transparent;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 /* --- table page --- */
