@@ -4,11 +4,13 @@ import PhasesPage from './PhasesPage';
 import ResourcesPage from './ResourcesPage';
 import CardsPage from './CardsPage';
 import TablePage from './TablePage';
+import VariablesPage from './VariablesPage';
 
 const NAV_ITEMS = [
   { id: 'phases', label: 'Phases' },
   { id: 'resources', label: 'Resources' },
   { id: 'cards', label: 'Cards' },
+  { id: 'variables', label: 'Variables' },
   { id: 'table', label: 'Table' },
 ];
 
@@ -22,13 +24,13 @@ export default function App() {
   const [decks, setDecks] = useState(initial.decks);
   const [discards, setDiscards] = useState(initial.discards);
   const [hands, setHands] = useState(initial.hands);
-  const [cardClasses, setCardClasses] = useState(initial.cardClasses);
+  const [cardAttributes, setCardAttributes] = useState(initial.cardAttributes);
   const [cards, setCards] = useState(initial.cards);
   const [layout, setLayout] = useState(initial.layout);
 
   useEffect(() => {
-    saveState({ resources, variables, phases, players, decks, discards, hands, cardClasses, cards, layout });
-  }, [resources, variables, phases, players, decks, discards, hands, cardClasses, cards, layout]);
+    saveState({ resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout });
+  }, [resources, variables, phases, players, decks, discards, hands, cardAttributes, cards, layout]);
 
   return (
     <div className="sheet">
@@ -59,7 +61,10 @@ export default function App() {
             setHands={setHands}
           />
         )}
-        {active === 'cards' && <CardsPage cardClasses={cardClasses} setCardClasses={setCardClasses} cards={cards} setCards={setCards} />}
+        {active === 'cards' && (
+          <CardsPage cardAttributes={cardAttributes} setCardAttributes={setCardAttributes} cards={cards} setCards={setCards} />
+        )}
+        {active === 'variables' && <VariablesPage variables={variables} setVariables={setVariables} />}
         {active === 'table' && (
           <TablePage resources={resources} decks={decks} discards={discards} hands={hands} layout={layout} setLayout={setLayout} />
         )}

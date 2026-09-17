@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { newCard, newCardClass } from './store';
+import { newCard, newCardAttribute } from './store';
 
 function Section({ title, children }) {
   return (
@@ -10,11 +10,11 @@ function Section({ title, children }) {
   );
 }
 
-// A small, fixed-size preview — never grows with the number of classes a
-// card has. Outside select mode, clicking it opens the full editor; in
-// select mode, clicking anywhere on it toggles selection instead.
-function CardPreview({ card, classes, selectMode, selected, onToggleSelect, onOpen }) {
-  const classNames = card.classIds.map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean);
+// A small, fixed-size preview — stays the same size no matter how many
+// attributes exist. Outside select mode, clicking it opens the full
+// editor; in select mode, clicking anywhere on it toggles selection.
+function CardPreview({ card, attributes, selectMode, selected, onToggleSelect, onOpen }) {
+  const filled = attributes.map((a) => [a.name, card.attributes[a.id]]).filter(([, v]) => v);
   return (
     <div
       className={`card-preview${selected ? ' selected' : ''}`}
@@ -23,58 +23,15 @@ function CardPreview({ card, classes, selectMode, selected, onToggleSelect, onOp
     >
       {selectMode && <input type="checkbox" className="card-preview-check" checked={selected} readOnly />}
       <div className="card-preview-name">{card.name}</div>
-      {classNames.length > 0 && <div className="card-preview-classes">{classNames.join(', ')}</div>}
+      {filled.length > 0 && (
+        <div className="card-preview-classes">{filled.map(([name, v]) => `${name}: ${v}`).join(', ')}</div>
+      )}
     </div>
   );
 }
 
-// Inline "type a name, hit enter" affordance for creating a class right
-// from a card's class picker, matching the +New pattern used elsewhere.
-function NewClassChip({ onCreate }) {
-  const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  if (!creating) {
-    return (
-      <button className="class-chip new-class-chip" onClick={() => setCreating(true)}>
-        + New Class
-      </button>
-    );
-  }
-
-  return (
-    <input
-      autoFocus
-      className="entity-picker-input"
-      placeholder="class name"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft.trim()) onCreate(draft.trim());
-        setCreating(false);
-        setDraft('');
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') {
-          setCreating(false);
-          setDraft('');
-        }
-      }}
-    />
-  );
-}
-
-function CardEditor({ card, classes, onChange, onCreateClass, onDelete, onClose }) {
-  const toggleClass = (classId) => {
-    const has = card.classIds.includes(classId);
-    onChange({ ...card, classIds: has ? card.classIds.filter((id) => id !== classId) : [...card.classIds, classId] });
-  };
-
-  const createAndAssignClass = (name) => {
-    const id = onCreateClass(name);
-    onChange({ ...card, classIds: [...card.classIds, id] });
-  };
+function CardEditor({ card, attributes, onChange, onDelete, onClose }) {
+  const setAttribute = (attrId, value) => onChange({ ...card, attributes: { ...card.attributes, [attrId]: value } });
 
   return (
     <div className="side-panel-backdrop" onClick={onClose}>
@@ -103,21 +60,21 @@ function CardEditor({ card, classes, onChange, onCreateClass, onDelete, onClose 
               onChange={(e) => onChange({ ...card, description: e.target.value })}
             />
           </label>
-          <div className="field-label">
-            Classes
-            <div className="card-class-chips">
-              {classes.map((c) => (
-                <button
-                  key={c.id}
-                  className={`class-chip${card.classIds.includes(c.id) ? ' active' : ''}`}
-                  onClick={() => toggleClass(c.id)}
-                >
-                  {c.name}
-                </button>
-              ))}
-              <NewClassChip onCreate={createAndAssignClass} />
+
+          {attributes.length > 0 && (
+            <div className="field-label">
+              Attributes
+              <div className="card-attribute-fields">
+                {attributes.map((a) => (
+                  <label key={a.id} className="card-attribute-field">
+                    <span>{a.name}</span>
+                    <input value={card.attributes[a.id] ?? ''} onChange={(e) => setAttribute(a.id, e.target.value)} />
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
           <button className="btn btn-danger" onClick={onDelete}>
             Delete Card
           </button>
@@ -127,21 +84,21 @@ function CardEditor({ card, classes, onChange, onCreateClass, onDelete, onClose 
   );
 }
 
-export default function CardsPage({ cardClasses, setCardClasses, cards, setCards }) {
+export default function CardsPage({ cardAttributes, setCardAttributes, cards, setCards }) {
   const [editingId, setEditingId] = useState(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  const addClass = () => setCardClasses([...cardClasses, newCardClass(`Class ${cardClasses.length + 1}`)]);
-  const createClass = (name) => {
-    const c = newCardClass(name);
-    setCardClasses((prev) => [...prev, c]);
-    return c.id;
-  };
-  const updateClass = (id, patch) => setCardClasses(cardClasses.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  const removeClass = (id) => {
-    setCardClasses(cardClasses.filter((c) => c.id !== id));
-    setCards(cards.map((card) => ({ ...card, classIds: card.classIds.filter((cid) => cid !== id) })));
+  const addAttribute = () => setCardAttributes([...cardAttributes, newCardAttribute(`Attribute ${cardAttributes.length + 1}`)]);
+  const updateAttribute = (id, patch) => setCardAttributes(cardAttributes.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  const removeAttribute = (id) => {
+    setCardAttributes(cardAttributes.filter((a) => a.id !== id));
+    setCards(
+      cards.map((card) => {
+        const { [id]: _removed, ...rest } = card.attributes;
+        return { ...card, attributes: rest };
+      })
+    );
   };
 
   const addCard = () => setCards([...cards, newCard(`Card ${cards.length + 1}`)]);
@@ -171,20 +128,22 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
         <h1>Cards</h1>
       </div>
 
-      <Section title="Classes">
-        {cardClasses.length === 0 && <div className="empty-hint">No classes yet — try "Red", "Spade", "Enemy Card".</div>}
+      <Section title="Attributes">
+        {cardAttributes.length === 0 && (
+          <div className="empty-hint">No attributes yet — try "Color" and "Number". Every card gets its own value for each.</div>
+        )}
         <div className="resource-list">
-          {cardClasses.map((c) => (
-            <div className="connect-row" key={c.id}>
-              <input className="resource-name" value={c.name} onChange={(e) => updateClass(c.id, { name: e.target.value })} />
-              <button className="icon-btn danger" title="Remove class" onClick={() => removeClass(c.id)}>
+          {cardAttributes.map((a) => (
+            <div className="connect-row" key={a.id}>
+              <input className="resource-name" value={a.name} onChange={(e) => updateAttribute(a.id, { name: e.target.value })} />
+              <button className="icon-btn danger" title="Remove attribute" onClick={() => removeAttribute(a.id)}>
                 ✕
               </button>
             </div>
           ))}
         </div>
-        <button className="add-pill" onClick={addClass}>
-          + Class
+        <button className="add-pill" onClick={addAttribute}>
+          + Attribute
         </button>
       </Section>
 
@@ -215,7 +174,7 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
             <CardPreview
               key={card.id}
               card={card}
-              classes={cardClasses}
+              attributes={cardAttributes}
               selectMode={selectMode}
               selected={selectedIds.includes(card.id)}
               onToggleSelect={() => toggleSelect(card.id)}
@@ -231,9 +190,8 @@ export default function CardsPage({ cardClasses, setCardClasses, cards, setCards
       {editingCard && (
         <CardEditor
           card={editingCard}
-          classes={cardClasses}
+          attributes={cardAttributes}
           onChange={updateCard}
-          onCreateClass={createClass}
           onDelete={() => removeCard(editingCard.id)}
           onClose={() => setEditingId(null)}
         />

@@ -63,15 +63,17 @@ export function newHand(name = 'New Hand') {
   return { id: uid('hand'), name, playerId: '', discardId: '' };
 }
 
-// A class is just a name — a list of cards that belong to it. No color of
-// its own; grouping "7 of Spades" and "9 of Spades" into a "Spade" class
-// doesn't need one.
-export function newCardClass(name = 'New Class') {
-  return { id: uid('class'), name };
+// An attribute is a shared property definition every card has a slot for —
+// like a spreadsheet column ("Color", "Number", "Suit"). Every card fills
+// in its own value; there's no picking which attributes apply, since they
+// all do. This is what lets "if this card's Suit equals that card's Suit"
+// mean something, which a plain grouping/tag never could.
+export function newCardAttribute(name = 'New Attribute') {
+  return { id: uid('attr'), name };
 }
 
 export function newCard(name = 'New Card') {
-  return { id: uid('card'), name, classIds: [], description: '', color: '#ffffff' };
+  return { id: uid('card'), name, description: '', color: '#ffffff', attributes: {} };
 }
 
 // A condition clause is always variable-based: no other kind can gate a
@@ -191,6 +193,15 @@ function normalize(state) {
     return { ...rest, steps: (p.steps ?? []).map(migrateStep).filter(Boolean), transitions };
   };
 
+  // Cards from before the attributes rework had `classIds` and no
+  // `attributes` map — classes had no value-based equivalent, so they're
+  // just dropped; the card keeps its name/color/description.
+  const migrateCard = (c) => {
+    if (c.attributes) return c;
+    const { classIds, ...rest } = c;
+    return { ...rest, attributes: {} };
+  };
+
   return {
     resources: state.resources ?? [],
     variables: state.variables ?? [],
@@ -199,8 +210,8 @@ function normalize(state) {
     decks: state.decks ?? [],
     discards: state.discards ?? [],
     hands: state.hands ?? [],
-    cardClasses: state.cardClasses ?? [],
-    cards: state.cards ?? [],
+    cardAttributes: state.cardAttributes ?? [],
+    cards: (state.cards ?? []).map(migrateCard),
     layout: state.layout ?? {},
   };
 }
@@ -220,7 +231,7 @@ export function loadInitialState() {
     decks: [],
     discards: [],
     hands: [],
-    cardClasses: [],
+    cardAttributes: [],
     cards: [],
     layout: {},
   };
